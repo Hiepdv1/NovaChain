@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS walletaccesslogs;
+DROP TABLE IF EXISTS wallets;
+DROP TABLE IF EXISTS txoutputs;
+DROP TABLE IF EXISTS txinputs;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS blocks;

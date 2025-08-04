@@ -1,0 +1,17 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "db/chain/query.sql"
+    schema: "db/chain/schema.sql"
+    gen:
+      go:
+        package: "dbchain"
+        out: "internal/db/chain"
+    
+  - engine: "postgresql"
+    queries: "db/wallet/query.sql"
+    schema: "db/wallet/schema.sql"
+    gen:
+      go:
+        package: "dbwallet"
+        out: "internal/db/wallet"

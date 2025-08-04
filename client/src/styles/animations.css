@@ -1,0 +1,253 @@
+@theme {
+  --animate-float: float 8s ease-in-out infinite;
+  --animate-gradient-shift: gradientShift 15s ease infinite;
+  --animate-particle-float: particleFloat 15s linear infinite;
+  --animate-bounce-in: bounceIn 1s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --animate-pulse-ring: pulseRing 3s ease-out infinite;
+  --animate-floating-text: floatingText 3s ease-in-out infinite;
+  --animate-writer: typing 3s steps(40, end), blinkCaret 0.75s step-end infinite;
+  --animate-energy-pulse: energyPulse 6s ease-in-out infinite;
+  --animate-breathing-grow: breathingGrow 3s ease-in-out infinite;
+  --animate-slide-up: slideUp 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --animate-quantum-active-grow: activeGrow 3s ease-in-out infinite;
+  --animate-cascase-fade: cascaseFade 1s cubic-bezier(0.23, 1, 0.32, 1) 0.1s
+    both;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0px) rotate(0deg) scale(1);
+      opacity: 0.6;
+    }
+    25% {
+      transform: translateY(-30px) rotate(90deg) scale(1.1);
+      opacity: 0.8;
+    }
+    50% {
+      transform: translateY(-10px) rotate(180deg) scale(0.9);
+      opacity: 1;
+    }
+    75% {
+      transform: translateY(20px) rotate(270deg) scale(1.05);
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes gradientShift {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  @keyframes particleFloat {
+    0% {
+      transform: translateX(0) translateY(100vh) scale(0) rotate(0deg);
+      opacity: 0;
+      filter: hue-rotate(0deg);
+    }
+    10% {
+      transform: translateX(20px) translateY(90vh) scale(1.2) rotate(45deg);
+      opacity: 1;
+      filter: hue-rotate(60deg);
+    }
+    30% {
+      transform: translateX(-15px) translateY(70vh) scale(0.8) rotate(120deg);
+      filter: hue-rotate(120deg);
+    }
+    50% {
+      transform: translateY(50vh) translateX(25px) scale(1.5) rotate(180deg);
+      filter: hue-rotate(180deg);
+    }
+    70% {
+      transform: translateY(30vh) translateX(-20px) scale(1) rotate(270deg);
+      filter: hue-rotate(180deg);
+    }
+    90% {
+      opacity: 1;
+      transform: translateY(10vh) translateX(10px) scale(0.6) rotate(315deg);
+      filter: hue-rotate(300deg);
+    }
+    100% {
+      transform: translateY(0) translateX(0) scale(0) rotate(360deg);
+      opacity: 0;
+      filter: hue-rotate(360deg);
+    }
+  }
+
+  @keyframes bounceIn {
+    0% {
+      transform: scale(0.3) rotate(-16deg);
+      opacity: 0;
+    }
+    30% {
+      transform: scale(1.1) rotate(10deg);
+      opacity: 0.8;
+    }
+    60% {
+      transform: scale(0.95) rotate(-6deg);
+      opacity: 0.9;
+    }
+    80% {
+      transform: scale(1.2) rotate(3deg);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1) rotate(0deg);
+      opacity: 1;
+    }
+  }
+
+  @keyframes pulseRing {
+    0% {
+      transform: scale(0.8);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2.5);
+      opacity: 0;
+    }
+  }
+
+  @keyframes floatingText {
+    0%,
+    100% {
+      transform: translateY(0px);
+      text-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    }
+
+    50% {
+      transform: translateY(-10px);
+      text-shadow: 0 8px 10px rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  @keyframes typing {
+    0% {
+      width: 0;
+    }
+    100% {
+      width: 100%;
+    }
+  }
+
+  @keyframes blinkCaret {
+    0%,
+    100% {
+      opacity: 1;
+      border-color: transparent;
+    }
+    50% {
+      border-color: rgba(255, 255, 255, 0.8);
+    }
+  }
+
+  @keyframes energyPulse {
+    0%,
+    100% {
+      transform: scale(1) rotate(0deg);
+      opacity: 0.6;
+      filter: blur(1px) hue-rotate(90deg);
+    }
+    25% {
+      transform: scale(1.3) rotate(90deg);
+      opacity: 0.9;
+      filter: blur(2px) hue-rotate(90deg);
+    }
+    50% {
+      transform: scale(0.7) rotate(180deg);
+      opacity: 1;
+      filter: blur(0.5px) hue-rotate(180deg);
+    }
+    75% {
+      transform: scale(1.1) rotate(270deg);
+      opacity: 0.8;
+      filter: blur(1.5px) hue-rotate(270deg);
+    }
+  }
+
+  @keyframes breathingGrow {
+    0%,
+    100% {
+      box-shadow: 0px 0px 20px rgba(255, 255, 255, 0.3);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(255, 255, 255, 0.8),
+        0 0 60px rgba(102, 126, 234, 0.4);
+      transform: scale(1.05);
+    }
+  }
+
+  @keyframes slideUp {
+    0% {
+      transform: translateY(50px) scale(0.9);
+      opacity: 0;
+      filter: blur(5px);
+    }
+    50% {
+      transform: translateY(20px) scale(0.95);
+      opacity: 0.7;
+      filter: blur(2px);
+    }
+    100% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      filter: blur(0px);
+    }
+  }
+
+  @keyframes rainbowShimmer {
+    0% {
+      left: -100%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+
+  @keyframes activeGrow {
+    0%,
+    100% {
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.6),
+        0 0 30px rgba(102, 126, 234, 0.5);
+    }
+    50% {
+      box-shadow: 0 15px 35px rgba(102, 126, 234, 0.8),
+        0 0 40px rgba(102, 126, 234, 0.7);
+    }
+  }
+
+  @keyframes cascaseFade {
+    0% {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes strengthShimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes strengthFlow {
+    0% {
+      left: -100%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+}

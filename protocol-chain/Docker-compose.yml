@@ -1,0 +1,84 @@
+
+
+services:
+  fullnode:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    image: blockchain:latest
+    container_name: fullnode
+    entrypoint: ["./entrypoint.sh"]
+    volumes:
+      - fullnode_data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - INSTANCE_ID=9000
+      - WALLET_ADDRESS=1Bdsgq97REeG8L73CUfpgRG3Kg1ZT54HSZ
+      - PORT=9000
+      - START_NODE_FLAGS=--Fullnode=true
+      - WALLET_ADDRESS_CHECKSUM=4
+    ports:
+      - "9000:9000"
+    networks:
+      - blocknet
+    stdin_open: true
+    tty: true
+
+  miner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    image: blockchain:latest
+    container_name: miner
+    entrypoint: ["./entrypoint.sh"]
+    volumes:
+      - miner_data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - INSTANCE_ID=9001
+      - WALLET_ADDRESS=18GXvPuYsokcbLeseopRrYSoBUT1qSp7tw
+      - PORT=9001
+      - START_NODE_FLAGS=--Miner=true --Address=18GXvPuYsokcbLeseopRrYSoBUT1qSp7tw
+      - WALLET_ADDRESS_CHECKSUM=4
+    ports:
+      - "9001:9001"
+    networks:
+      - blocknet
+    stdin_open: true
+    tty: true
+
+  fullnode_rpc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    image: blockchain:latest
+    container_name: fullnode_rpc
+    entrypoint: ["./entrypoint.sh"]
+    volumes:
+      - fullnode_owner_data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - INSTANCE_ID=9002
+      - WALLET_ADDRESS=1EfKZzesCJgahgUuWMKUneQ9ymuCTtbTA2
+      - PORT=9002
+      - START_NODE_FLAGS=--Fullnode=true --RPC=true --RPC-Port=9050 --RPC-Addr=0.0.0.0 --RPC-Mode=http
+      - WALLET_ADDRESS_CHECKSUM=4
+    ports:
+      - "9002:9002"
+      - "9050:9050"
+    networks:
+      - blocknet
+    stdin_open: true
+    tty: true
+
+volumes:
+  fullnode_data:
+  miner_data:
+  fullnode_owner_data:
+
+networks:
+  blocknet:
+    driver: bridge

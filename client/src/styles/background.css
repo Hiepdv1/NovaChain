@@ -1,0 +1,34 @@
+@theme {
+  --color-form-wallet: rgba(255, 255, 255, 0.25);
+}
+
+@layer components {
+  .bg-wallet-gradient {
+    background: linear-gradient(
+      135deg,
+      #667eea 0%,
+      #764ba2 25%,
+      #f093fb 50%,
+      #f5576c 75%,
+      #4facfe 100%
+    );
+  }
+
+  .bg-spotlight {
+    background: radial-gradient(
+      circle at 40% 40%,
+      rgba(255, 255, 255, 0.7),
+      rgba(99, 255, 204, 0.3),
+      rgba(51, 102, 255, 0.2)
+    );
+  }
+
+  .bg-particle-gradient {
+    background: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.9),
+      rgba(102, 126, 234, 0.3),
+      transparent
+    );
+  }
+}

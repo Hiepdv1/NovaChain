@@ -1,0 +1,18 @@
+
+
+# 
+**chain
+
+# Ignore all Logs directories at any level
+**/logs/
+
+# Ignore all test directories at any level
+**/test/
+**/tests/
+
+# Ignore all files that include 'test' in their name
+**/*test*
+
+**gob
+
+**.ps1
