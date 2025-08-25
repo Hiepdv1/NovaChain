@@ -10,5 +10,5 @@ type LogEntry struct {
 	Recover   any    `json:"recover,omitempty"`
 	Stack     string `json:"stack,omitempty"`
 	IPAddress string `json:"ip,omitempty"`
-	Duration  string `json:"duration"`
+	Duration  string `json:"duration,omitempty"`
 }

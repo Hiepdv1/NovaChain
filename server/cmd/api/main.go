@@ -1,50 +1,27 @@
 package main
 
 import (
-	"ChainServer/bootstrap"
-	"ChainServer/internal/app/router"
-	"ChainServer/internal/common/config"
-	"ChainServer/internal/common/middlewares"
-	"ChainServer/internal/common/response"
+	"ChainServer/internal/bootstrap"
+	"ChainServer/internal/common/env"
 	"ChainServer/internal/common/utils"
-	"ChainServer/internal/scheduler"
-	"ChainServer/scripts"
 	"fmt"
 
-	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 	defer utils.RecoverAppPanic()
 
-	var envConfig = bootstrap.AppEnv()
-	config.InitLogger(envConfig.AppEnv)
-	config.InitAppRoot()
-	db := config.InitPostgres()
-	defer db.Close()
-	scripts.AutoMigrate(db)
-	scheduler.StartSchedulers()
+	bootstrap.Init()
 
-	app := fiber.New(fiber.Config{})
+	db := bootstrap.StartConnDB()
+	defer db.Psql.Close()
 
-	app.Use(middlewares.MiddlewareRecover())
-	app.Use(middlewares.MiddlewareRequestLogger())
+	bootstrap.StartSchedulers()
 
-	router.RegisterRoutes(app)
+	app := bootstrap.InitRouter()
 
-	app.Use(func(c *fiber.Ctx) error {
-		return response.Error(
-			c,
-			fiber.StatusNotFound,
-			"Endpoint not found",
-			response.ErrNotFound,
-			"Not Found",
-			nil,
-		)
-	})
-
-	if err := app.Listen(fmt.Sprint(":", envConfig.ServerPort)); err != nil {
+	if err := app.Listen(fmt.Sprint(":", env.Cfg.ServerPort)); err != nil {
 		log.Error("Listening server error: ", err)
 	}
 }

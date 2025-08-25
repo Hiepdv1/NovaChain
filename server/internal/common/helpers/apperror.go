@@ -12,8 +12,7 @@ func HandleAppError(c *fiber.Ctx, appErr *apperror.AppError) error {
 		c,
 		int(appErr.Status),
 		appErr.Error(),
-		appErr.Code,
+		appErr.ErrType,
 		appErr.Err,
-		nil,
 	)
 }

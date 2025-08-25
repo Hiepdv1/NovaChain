@@ -29,6 +29,7 @@ type NetHeader struct {
 	BestHeight int64
 	Hash       []byte
 	SendFrom   string
+	isSynced   bool
 }
 
 type NetGetBlockHeader struct {

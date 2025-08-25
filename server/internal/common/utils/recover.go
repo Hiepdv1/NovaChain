@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"os"
 	"runtime"
 	"time"
 
@@ -23,6 +22,5 @@ func RecoverAppPanic() {
 
 		entry.Fatal("💥 Application panic — shutting down...")
 
-		os.Exit(1)
 	}
 }

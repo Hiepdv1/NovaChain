@@ -49,7 +49,6 @@ func (h *AppLogHandler) GetLogByTraceID(c *fiber.Ctx) error {
 			"TraceID not found",
 			response.ErrNotFound,
 			"Not Found",
-			nil,
 		)
 	}
 

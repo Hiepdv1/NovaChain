@@ -7,6 +7,9 @@ INSERT INTO wallets (
     $4, $5, $6
 ) RETURNING *;
 
+-- name: ExistsWalletByAddrAndPubkey :one
+SELECT EXISTS(SELECT 1 FROM wallets WHERE address = $1 AND public_key = $2);
+
 -- name: GetWalletByAddress :one
 SELECT * FROM wallets WHERE address = $1 LIMIT 1;
 

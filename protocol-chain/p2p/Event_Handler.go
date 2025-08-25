@@ -88,7 +88,9 @@ func (net *Network) HandleGetBlocksData(content *ChannelContent) {
 	UTXO := blockchain.UTXOSet{Blockchain: net.Blockchain}
 	UTXO.Compute()
 
-	BroadcastHeaderRequest(net)
+	if !net.syncCompleted {
+		BroadcastHeaderRequest(net)
+	}
 }
 
 func (net *Network) HandleGetData(content *ChannelContent) {
@@ -224,17 +226,26 @@ func (net *Network) HandleGetHeader(content *ChannelContent) {
 
 	bestHeight := net.Blockchain.GetBestHeight()
 	otherHeight := payload.BestHeight
+	exists, err := net.Blockchain.HasBlock(payload.Hash)
 
-	log.Info("BEST HEIGHT: ", bestHeight, " OTHER HEIGHT: ", otherHeight)
-	if bestHeight < otherHeight {
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if exists {
+		net.SendHeader(payload.SendFrom, false)
+	} else {
 		net.SendGetBlocks(&NetGetBlockHeader{
 			SendFrom: net.Host.ID().String(),
 			Height:   bestHeight,
 			Hash:     payload.Hash,
 		}, payload.SendFrom)
-	} else if bestHeight > otherHeight {
-		net.SendHeader(payload.SendFrom)
-	} else {
+	}
+
+	log.Info("BEST HEIGHT: ", bestHeight, " OTHER HEIGHT: ", otherHeight)
+
+	if payload.isSynced {
 		if !net.syncCompleted {
 			if len(net.peersSyncedWithLocalHeight) == len(net.GeneralChannel.ListPeers()) {
 				log.Info("All peers synced with local height, marking network as synced")
@@ -245,6 +256,26 @@ func (net *Network) HandleGetHeader(content *ChannelContent) {
 			}
 		}
 	}
+
+	// if bestHeight < otherHeight {
+	// 	net.SendGetBlocks(&NetGetBlockHeader{
+	// 		SendFrom: net.Host.ID().String(),
+	// 		Height:   bestHeight,
+	// 		Hash:     payload.Hash,
+	// 	}, payload.SendFrom)
+	// } else if bestHeight > otherHeight {
+	// 	net.SendHeader(payload.SendFrom)
+	// } else {
+	// 	if !net.syncCompleted {
+	// 		if len(net.peersSyncedWithLocalHeight) == len(net.GeneralChannel.ListPeers()) {
+	// 			log.Info("All peers synced with local height, marking network as synced")
+	// 			net.isSynced <- struct{}{}
+	// 		} else if !slices.Contains(net.peersSyncedWithLocalHeight, payload.SendFrom) {
+	// 			log.Info("Waiting for more peers to sync with local height")
+	// 			net.peersSyncedWithLocalHeight = append(net.peersSyncedWithLocalHeight, payload.SendFrom)
+	// 		}
+	// 	}
+	// }
 }
 
 func (net *Network) HandleGetTxFromPool(content *ChannelContent) {

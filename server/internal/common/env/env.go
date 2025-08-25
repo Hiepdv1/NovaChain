@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync"
 
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -14,24 +15,37 @@ var (
 	_, file, _, _ = runtime.Caller(0)
 
 	root = filepath.Join(filepath.Dir(file), "../../../")
+	once sync.Once
 )
 
 type Env struct {
-	ServerPort       string
-	AppEnv           string
-	MaxTimeLog       int64 // days
-	Fullnode_RPC_URL string
-	DB_URL           string
+	ServerPort                      string
+	AppEnv                          string
+	MaxTimeLog                      int64 // days
+	Fullnode_RPC_URL                string
+	DB_URL                          string
+	Wallet_Signature_Expiry_Minutes int64 // minutes
+	Jwt_Secret_Key                  string
+	Jwt_TTL_Minutes                 int64
+	Domain_Client                   string
 }
 
-func New() *Env {
-	return &Env{
-		ServerPort:       GetEnvAsString("SERVER_PORT", "3001"),
-		AppEnv:           GetEnvAsString("APP_ENV", "development"),
-		MaxTimeLog:       GetEnvAsInt("MAX_TIME_LOG", 30),
-		Fullnode_RPC_URL: GetEnvAsString("FULLNODE_RPC_URL", "http://0.0.0.0:9050/__jsonrpc"),
-		DB_URL:           GetEnvAsString("DATABASE_URL", ""),
-	}
+var Cfg *Env
+
+func InitEnv() {
+	once.Do(func() {
+		Cfg = &Env{
+			ServerPort:                      GetEnvAsString("SERVER_PORT", "3001"),
+			AppEnv:                          GetEnvAsString("APP_ENV", "development"),
+			MaxTimeLog:                      GetEnvAsInt("MAX_TIME_LOG", 30),
+			Fullnode_RPC_URL:                GetEnvAsString("FULLNODE_RPC_URL", "http://0.0.0.0:9050/__jsonrpc"),
+			DB_URL:                          GetEnvAsString("DATABASE_URL", ""),
+			Wallet_Signature_Expiry_Minutes: GetEnvAsInt("WALLET_SIGNATURE_EXPIRY_MINUTES", 1),
+			Jwt_Secret_Key:                  GetEnvAsString("JWT_SECRET_KEY", "default_secret_key"),
+			Jwt_TTL_Minutes:                 GetEnvAsInt("JWT_TTL_MINUTES", 1800),
+			Domain_Client:                   GetEnvAsString("DOMAIN_CLIENT", ""),
+		}
+	})
 }
 
 func GetEnvVariable(key string) string {

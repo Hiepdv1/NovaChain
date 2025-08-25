@@ -5,9 +5,8 @@ import (
 	"runtime"
 )
 
-var AppRoot string
-
-func InitAppRoot() {
+func AppRoot() string {
 	_, f, _, _ := runtime.Caller(0)
-	AppRoot = filepath.Clean(filepath.Join(filepath.Dir(f), "../../../"))
+	appRoot := filepath.Clean(filepath.Join(filepath.Dir(f), "../../"))
+	return appRoot
 }

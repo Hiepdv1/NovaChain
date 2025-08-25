@@ -2,6 +2,7 @@ package chain
 
 import (
 	"ChainServer/internal/common/env"
+	"ChainServer/internal/db"
 	dbchain "ChainServer/internal/db/chain"
 	"context"
 	"database/sql"
@@ -12,10 +13,10 @@ type dbChainRepository struct {
 	queries *dbchain.Queries
 }
 
-func NewDBChainRepository(db *sql.DB, env *env.Env) DBChainRepository {
+func NewDBChainRepository() DBChainRepository {
 	return &dbChainRepository{
-		env:     env,
-		queries: dbchain.New(db),
+		env:     env.Cfg,
+		queries: dbchain.New(db.Psql),
 	}
 }
 

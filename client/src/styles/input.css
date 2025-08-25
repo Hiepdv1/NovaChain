@@ -3,11 +3,6 @@
     position: relative;
   }
 
-  .enhanced-floating input {
-    /* padding-top: 1.75rem;
-    padding-bottom: 0.75rem; */
-  }
-
   .enhanced-floating label {
     position: absolute;
     left: 1.35rem;
@@ -16,6 +11,15 @@
     transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
     pointer-events: none;
     font-weight: 500;
+  }
+
+  .enhanced-floating textarea:focus + label,
+  .enhanced-floating textarea:not(:placeholder-shown) + label {
+    top: 0.5rem;
+    font-size: 0.75rem;
+    color: #667eea;
+    font-weight: 700;
+    transform: scale(0.95);
   }
 
   .enhanced-floating input:not(:placeholder-shown) + label,

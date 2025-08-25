@@ -201,7 +201,7 @@ func (net *Network) handleLimitedOperation(limiter chan struct{}, content *Chann
 			handler(content)
 		}()
 	default:
-		log.Printf("WARNING: Processing is busy, skipping operation for content from %s", content.SendFrom)
+		log.Warnf("WARNING: Processing is busy, skipping operation for content from %s", content.SendFrom)
 	}
 }
 

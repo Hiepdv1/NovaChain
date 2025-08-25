@@ -16,6 +16,31 @@
     border: 1px solid rgba(255, 255, 255, 0.4);
   }
 
+  .key-display-dark {
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(40px);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    color: #00ff88;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .key-display-dark::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(0, 255, 136, 0.1),
+      transparent
+    );
+    animation: keyShimmer 3s infinite;
+  }
+
   .shimmer,
   .rainbow-shimmer {
     position: relative;
@@ -89,6 +114,7 @@
     z-index: 10;
   }
 
+  .quantum-step.completed::before,
   .quantum-step.active::before {
     background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #667eea 100%);
     box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
@@ -97,12 +123,11 @@
   .quantum-step::before {
     content: '';
     position: absolute;
-    top: 50%;
+    top: 32%;
     left: 100%;
-    width: 100px;
-    height: 3px;
-    background: none;
-    transform: translateY(-50%);
+    width: 50px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.35);
     border-radius: 2px;
     transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
   }
@@ -114,6 +139,14 @@
     box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3),
       0 0 30px rgba(102, 126, 234, 0.2);
     animation: activeGlow 3s ease-in-out infinite;
+  }
+
+  .quantum-circle.completed {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: #10b981;
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3),
+      0 0 25px rgba(16, 185, 129, 0.2);
   }
 
   .quantum-circle {
@@ -145,5 +178,30 @@
     );
     opacity: 0;
     transition: opacity 0.3s ease;
+  }
+}
+
+@layer components {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 100, 100, 0.5);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

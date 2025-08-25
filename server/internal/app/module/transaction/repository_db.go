@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"ChainServer/internal/db"
 	dbchain "ChainServer/internal/db/chain"
 	"context"
 	"database/sql"
@@ -10,9 +11,9 @@ type dbTransactionRepository struct {
 	queries *dbchain.Queries
 }
 
-func NewDbTransactionRepository(db *sql.DB) DbTransactionRepository {
+func NewDbTransactionRepository() DbTransactionRepository {
 	return &dbTransactionRepository{
-		queries: dbchain.New(db),
+		queries: dbchain.New(db.Psql),
 	}
 }
 

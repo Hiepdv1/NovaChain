@@ -1,11 +1,12 @@
 package response
 
-type ErrorCode string
+type ErrorType string
 
 const (
-	ErrBadRequest   ErrorCode = "BAD_REQUEST"
-	ErrUnauthorized ErrorCode = "UNAUTHORIZED"
-	ErrNotFound     ErrorCode = "NOT_FOUND"
-	ErrInternal     ErrorCode = "INTERNAL_SERVER_ERROR"
-	ErrValidation   ErrorCode = "VALIDATION_ERROR"
+	ErrBadRequest      ErrorType = "BAD_REQUEST"
+	ErrUnauthorized    ErrorType = "UNAUTHORIZED"
+	ErrNotFound        ErrorType = "NOT_FOUND"
+	ErrInternal        ErrorType = "INTERNAL_SERVER_ERROR"
+	ErrValidation      ErrorType = "VALIDATION_ERROR"
+	ErrTooManyRequests ErrorType = "TOO_MANY_REQUESTS"
 )

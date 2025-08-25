@@ -3,11 +3,12 @@ package blocksync
 import (
 	"ChainServer/internal/app/module/chain"
 	"ChainServer/internal/app/module/transaction"
-	"ChainServer/internal/common/config"
+	"ChainServer/internal/db"
 	dbchain "ChainServer/internal/db/chain"
 	dbwallet "ChainServer/internal/db/wallet"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -42,7 +43,8 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 		log.Infof("Sync New TxInput: %v", txIn)
 
 		if in.PubKey != "" {
-			wallet, err := j.dbWallet.GetWalletByPubkey(ctx, in.PubKey)
+
+			wallet, err := j.dbWallet.GetWalletByPubkey(ctx, []byte(in.PubKey))
 			if err != nil && errors.Is(err, sql.ErrNoRows) {
 				continue
 			} else if err != nil {
@@ -224,7 +226,12 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 
 			for _, input := range txInputs {
 				if input.PubKey != "" {
-					wallet, err := j.dbWallet.GetWalletByPubkey(ctx, input.PubKey)
+					pubkey, err := hex.DecodeString(input.PubKey)
+					if err != nil {
+						return fmt.Errorf("failed to decode pubkey: %v", err)
+					}
+
+					wallet, err := j.dbWallet.GetWalletByPubkey(ctx, pubkey)
 					if err != nil && errors.Is(err, sql.ErrNoRows) {
 						continue
 					} else if err != nil {
@@ -388,7 +395,7 @@ func (j *jobBlockSync) StartBlockSync(interval time.Duration) {
 
 		log.Infof("📦 Received %d blocks", len(blocks))
 
-		tx, err := config.DB.BeginTx(ctx, nil)
+		tx, err := db.Psql.BeginTx(ctx, nil)
 		if err != nil {
 			log.Error("❌ BeginTx error:", err)
 			continue

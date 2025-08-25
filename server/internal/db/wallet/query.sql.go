@@ -99,6 +99,22 @@ func (q *Queries) DecreaseWalletBalance(ctx context.Context, arg DecreaseWalletB
 	return err
 }
 
+const existsWalletByAddrAndPubkey = `-- name: ExistsWalletByAddrAndPubkey :one
+SELECT EXISTS(SELECT 1 FROM wallets WHERE address = $1 AND public_key = $2)
+`
+
+type ExistsWalletByAddrAndPubkeyParams struct {
+	Address   string
+	PublicKey string
+}
+
+func (q *Queries) ExistsWalletByAddrAndPubkey(ctx context.Context, arg ExistsWalletByAddrAndPubkeyParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, existsWalletByAddrAndPubkey, arg.Address, arg.PublicKey)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getListAccessLogByWalletID = `-- name: GetListAccessLogByWalletID :many
 SELECT id, wallet_id, access_time, ip, user_agent, access_type FROM wallet_access_logs WHERE wallet_id = $1 OFFSET $2 LIMIT $3
 `

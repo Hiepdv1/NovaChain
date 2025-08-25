@@ -1,8 +1,8 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"log"
 
 	"golang.org/x/crypto/ripemd160"
@@ -33,7 +33,7 @@ func CheckSum(data []byte) []byte {
 	return secondHash[:checkSumlength]
 }
 
-func PubKeyToAddress(pubkey []byte) string {
+func PubKeyToAddress(pubkey []byte) []byte {
 	pubHash := PublicKeyHash(pubkey)
 	versionedHash := append([]byte{version}, pubHash...)
 
@@ -42,5 +42,20 @@ func PubKeyToAddress(pubkey []byte) string {
 	fullHash := append(versionedHash, checksum...)
 	address := Base58Encode(fullHash)
 
-	return hex.EncodeToString(address)
+	return address
+}
+
+func ValidateAddress(address string) bool {
+	if len(address) != 34 {
+		return false
+	}
+
+	fullHash := Base58Decode(address)
+
+	checkSumFromHash := fullHash[len(fullHash)-checkSumlength:]
+	version := fullHash[0]
+	pubKeyHash := fullHash[1 : len(fullHash)-checkSumlength]
+	checkSum := CheckSum(append([]byte{version}, pubKeyHash...))
+
+	return bytes.Equal(checkSumFromHash, checkSum)
 }

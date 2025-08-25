@@ -171,6 +171,23 @@ func (bc *Blockchain) ContinueBlockchain() *Blockchain {
 
 }
 
+func (bc *Blockchain) HasBlock(hash []byte) (bool, error) {
+	err := bc.Database.View(func(txn *badger.Txn) error {
+		_, err := txn.Get([]byte(hash))
+		return err
+	})
+
+	if err == badger.ErrKeyNotFound {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("error checking block in BadgerDB: %w", err)
+	}
+
+	return true, nil
+}
+
 func (bc *Blockchain) AdjustDifficulty(lastestBlock Block) int64 {
 
 	if lastestBlock.Height%AdjustmentInterval != 0 {

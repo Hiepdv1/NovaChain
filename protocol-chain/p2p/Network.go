@@ -194,7 +194,7 @@ func SetupDiscovery(ctx context.Context, host host.Host) error {
 
 	log.Info("Bootstrapping the DHT")
 	if err := kademliaDHT.Bootstrap(ctx); err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	log.Info("Annoucing ourselves...")

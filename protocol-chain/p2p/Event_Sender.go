@@ -15,7 +15,7 @@ func BroadcastHeaderRequest(net *Network) {
 		return
 	}
 	for _, peer := range peers {
-		net.SendHeader(peer.String())
+		net.SendHeader(peer.String(), true)
 	}
 }
 
@@ -76,7 +76,7 @@ func (net *Network) SendBlock(SendTo string, serializedBlocks [][]byte) {
 	net.GeneralChannel.Publish("Received send block", request, SendTo)
 }
 
-func (net *Network) SendHeader(sendTo string) {
+func (net *Network) SendHeader(sendTo string, isSynced bool) {
 	lastestBlock, err := net.Blockchain.GetLastBlock()
 	if err != nil {
 		log.Errorf("Error getting last block: %v", err)
@@ -87,6 +87,7 @@ func (net *Network) SendHeader(sendTo string) {
 		BestHeight: lastestBlock.Height,
 		Hash:       lastestBlock.Hash,
 		SendFrom:   net.Host.ID().String(),
+		isSynced:   isSynced,
 	})
 	request := append(CmdToBytes(PREFIX_HEADER), payload...)
 	err = net.GeneralChannel.Publish("Received send header", request, sendTo)

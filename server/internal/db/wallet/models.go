@@ -16,8 +16,8 @@ type Wallet struct {
 	PublicKey     string
 	PublicKeyHash string
 	Balance       string
-	CreateAt      sql.NullTime
-	LastLogin     sql.NullTime
+	CreateAt      sql.NullTime `json:"-"`
+	LastLogin     sql.NullTime `json:"-"`
 }
 
 type WalletAccessLog struct {

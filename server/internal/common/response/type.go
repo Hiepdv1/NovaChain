@@ -1,12 +1,12 @@
 package response
 
 type ResponseBody struct {
+	Success    bool   `json:"success"`
 	StatusCode int    `json:"statusCode"`
 	Message    string `json:"message"`
 	Data       any    `json:"data,omitempty"`
 	Error      any    `json:"error,omitempty"`
 	TraceID    string `json:"traceId,omitempty"`
-	Stack      any    `json:"stack,omitempty"`
 }
 
 type PaginationMeta struct {
@@ -18,6 +18,7 @@ type PaginationMeta struct {
 }
 
 type ListResponse struct {
+	Success    bool           `json:"success"`
 	StatusCode int            `json:"statusCode"`
 	Message    string         `json:"message"`
 	Data       any            `json:"data"`

@@ -12,8 +12,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var envConfig = env.New()
-
 func MiddlewareRequestLogger() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		start := time.Now()
@@ -29,7 +27,7 @@ func MiddlewareRequestLogger() fiber.Handler {
 			"method":    c.Method(),
 			"path":      c.OriginalURL(),
 			"status":    c.Response().StatusCode(),
-			"duration":  stop,
+			"duration":  stop.String(),
 			"trace_id":  traceID,
 			"ip":        c.IP(),
 		})
@@ -81,7 +79,7 @@ func MiddlewareRecover() fiber.Handler {
 
 				entry.Error("💥 Panic caught")
 
-				if envConfig.AppEnv == "production" {
+				if env.Cfg.AppEnv == "production" {
 
 					err = response.Error(
 						c,
@@ -89,7 +87,6 @@ func MiddlewareRecover() fiber.Handler {
 						"Internal Server Error",
 						response.ErrInternal,
 						r,
-						nil,
 					)
 				} else {
 					err = response.Error(
@@ -98,7 +95,6 @@ func MiddlewareRecover() fiber.Handler {
 						fmt.Sprintf("%v", r),
 						response.ErrInternal,
 						r,
-						stackTrace,
 					)
 				}
 			}

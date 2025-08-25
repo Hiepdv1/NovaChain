@@ -1,13 +1,9 @@
 package response
 
-import (
-	"ChainServer/internal/common/env"
-)
+import "ChainServer/internal/common/env"
 
-var config = env.New()
-
-func GetMessage(code ErrorCode, rawMsg string) string {
-	if config.AppEnv == "production" {
+func GetMessage(code ErrorType, rawMsg string) string {
+	if env.Cfg.AppEnv == "production" {
 		switch code {
 		case ErrInternal:
 			return "Something went wrong, please try again later"

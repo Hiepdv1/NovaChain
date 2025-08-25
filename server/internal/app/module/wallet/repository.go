@@ -7,15 +7,16 @@ import (
 )
 
 type RPCWalletRepository interface {
-	GetBalance(address string) ([]byte, error)
+	GetBalance(address string) (*Balance, error)
 }
 
 type DBWalletRepository interface {
 	CreateWallet(ctx context.Context, args dbwallet.CreateWalletParams, tx *sql.Tx) (dbwallet.Wallet, error)
-	GetWalletByPubkey(ctx context.Context, pubkey string) (dbwallet.Wallet, error)
+	GetWalletByPubkey(ctx context.Context, pubkey []byte) (*dbwallet.Wallet, error)
 	IncreaseWalletBalance(ctx context.Context, args dbwallet.IncreaseWalletBalanceParams, tx *sql.Tx) error
 	DecreaseWalletBalance(ctx context.Context, args dbwallet.DecreaseWalletBalanceParams, tx *sql.Tx) error
 	CreateWalletAccessLog(ctx context.Context, args dbwallet.CreateWalletAccessLogParams, tx *sql.Tx) error
 	GetListAccessLogByWalletID(ctx context.Context, args dbwallet.GetListAccessLogByWalletIDParams) ([]dbwallet.WalletAccessLog, error)
-	GetWalletByPubKeyHash(ctx context.Context, PubkeyHash string) (dbwallet.Wallet, error)
+	GetWalletByPubKeyHash(ctx context.Context, PubkeyHash string) (*dbwallet.Wallet, error)
+	ExistsWalletByPubKey(ctx context.Context, pubkey []byte) (bool, error)
 }

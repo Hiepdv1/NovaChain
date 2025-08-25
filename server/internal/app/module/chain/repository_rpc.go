@@ -10,9 +10,9 @@ type rpcChainRepository struct {
 	env *env.Env
 }
 
-func NewRPCChainRepository(env *env.Env) RPCChainRepository {
+func NewRPCChainRepository() RPCChainRepository {
 	return &rpcChainRepository{
-		env: env,
+		env: env.Cfg,
 	}
 }
 

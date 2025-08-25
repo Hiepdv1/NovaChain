@@ -1,6 +1,7 @@
 package applog
 
 import (
+	"ChainServer/internal/common/config"
 	"ChainServer/internal/common/utils"
 	"bufio"
 	"encoding/json"
@@ -15,8 +16,8 @@ type fileAppLogRepository struct {
 	root string
 }
 
-func NewFileAppLogRepository(root string) AppLogRepository {
-	return &fileAppLogRepository{root: root}
+func NewFileAppLogRepository() AppLogRepository {
+	return &fileAppLogRepository{root: config.AppRoot()}
 }
 
 func (r *fileAppLogRepository) ReadPaginatedErrorLogs(page, limit int) ([]*LogEntry, error) {

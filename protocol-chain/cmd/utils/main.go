@@ -205,6 +205,7 @@ func (cli *CommandLine) Send(from, to string, amount, fee float64, mineNow bool)
 		SendTo:    to,
 		Amount:    amount,
 		Timestamp: time.Now().Unix(),
+		Error:     nil,
 	}
 }
 
@@ -256,7 +257,7 @@ func (cli *CommandLine) GetBalance(address string) BalanceResponse {
 		Balance:   balance,
 		Address:   address,
 		Timestamp: time.Now().Unix(),
-		Error:     &Error{},
+		Error:     nil,
 	}
 }
 

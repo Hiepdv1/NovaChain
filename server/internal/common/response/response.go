@@ -8,6 +8,7 @@ func Success(c *fiber.Ctx, data any, message string, statusCode int) error {
 	traceID := GetTraceID(c)
 
 	res := ResponseBody{
+		Success:    true,
 		StatusCode: statusCode,
 		Message:    message,
 		Data:       data,
@@ -17,18 +18,15 @@ func Success(c *fiber.Ctx, data any, message string, statusCode int) error {
 	return c.Status(statusCode).JSON(res)
 }
 
-func Error(c *fiber.Ctx, statusCode int, rawMsg string, code ErrorCode, err any, stack any) error {
+func Error(c *fiber.Ctx, statusCode int, rawMsg string, errType ErrorType, err any) error {
 	traceID := GetTraceID(c)
 
 	res := ResponseBody{
+		Success:    false,
 		StatusCode: statusCode,
-		Message:    GetMessage(code, rawMsg),
+		Message:    GetMessage(errType, rawMsg),
 		Error:      err,
 		TraceID:    traceID,
-	}
-
-	if stack != nil {
-		res.Stack = stack
 	}
 
 	return c.Status(statusCode).JSON(res)
@@ -39,6 +37,7 @@ func SuccessList(c *fiber.Ctx, data any, meta PaginationMeta, message string, st
 	traceID := GetTraceID(c)
 
 	res := ListResponse{
+		Success:    true,
 		StatusCode: statusCode,
 		Message:    message,
 		Data:       data,
