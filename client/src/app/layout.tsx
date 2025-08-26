@@ -5,6 +5,7 @@ import UIProvider from '@/components/providers/ui-provider';
 import ReactQueryProvider from '@/components/providers/react-query-provider';
 import ModalProvider from '@/components/providers/modal-provider';
 import { WalletProvider } from '@/components/providers/wallet-provider';
+import { ThemeProvider } from '@/components/providers/theme-provider';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -27,17 +28,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="mdl-js">
+    <html lang="en" className="mdl-js" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ReactQueryProvider>
-          <WalletProvider>
-            <UIProvider>
-              <ModalProvider>{children}</ModalProvider>
-            </UIProvider>
-          </WalletProvider>
-        </ReactQueryProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ReactQueryProvider>
+            <WalletProvider>
+              <UIProvider>
+                <ModalProvider>{children}</ModalProvider>
+              </UIProvider>
+            </WalletProvider>
+          </ReactQueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

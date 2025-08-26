@@ -1,1 +1,4 @@
 internal/logs/*.log
+.env
+
+**logs

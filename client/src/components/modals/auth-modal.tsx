@@ -142,17 +142,18 @@ const AuthModal = ({
             isConfirm: false,
           });
           useModalStore.getState().actions.closeModal();
+          router.refresh();
         },
       },
     );
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+    <div className="z-[9999] fixed inset-0 bg-black/40 flex items-center justify-center p-4">
       <div className="overflow-hidden bg-[rgba(255,255,255,.9)] backdrop-blur-xl max-w-md mx-auto w-full rounded-3xl">
         <div className="p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-[linear-gradient(135deg,_#fb7185_0%,_#f97316_100%)] shadow-[0_8px_25px_rgba(251,113,133,0.3)] rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-primary shadow-[0_8px_25px_rgba(251,113,133,0.3)] rounded-2xl flex items-center justify-center mx-auto mb-6">
               <svg
                 className="w-12 h-12 text-white"
                 fill="none"
@@ -177,10 +178,10 @@ const AuthModal = ({
 
           <div className="mb-8">
             <div className="glass-card rounded-2xl p-6 border border-white/20 relative overflow-hidden">
-              <div className="absolute inset-0 bg-slate-300" />
+              <div className="absolute inset-0 bg-[lab(100_0_0)]" />
               <div className="relative z-10 flex items-center space-x-4">
                 <div className="shrink-0">
-                  <div className="animate-glass-float rounded-xl flex items-center justify-center shadow-xl w-12 h-12 bg-[linear-gradient(135deg,_#fb7185_0%,_#f97316_100%)]">
+                  <div className="animate-glass-float rounded-xl flex items-center justify-center shadow-xl w-12 h-12 bg-primary">
                     <svg
                       className="w-7 h-7 text-white"
                       fill="none"
@@ -219,7 +220,7 @@ const AuthModal = ({
                   <div className="flex items-center justify-end mt-3">
                     <span className="text-xs font-bold text-black/70">
                       Network:
-                      <span className="text-xs text-[#f97316]"> ChainB</span>
+                      <span className="text-xs text-primary"> CCC</span>
                     </span>
                   </div>
                 </div>
@@ -243,7 +244,7 @@ const AuthModal = ({
                     name="password"
                     type={isPasswordVisible ? 'text' : 'password'}
                     placeholder=" "
-                    variant="elegant"
+                    variant="levitating"
                     inputSize="md"
                     className={`${
                       !status.valid ? '!border-red-600' : ''
@@ -251,16 +252,13 @@ const AuthModal = ({
                     ref={(el) => void (inputRef.current = el)}
                     disabled={submit.isConfirm || submit.isCancel}
                   />
-                  <label
-                    htmlFor="password"
-                    className="bg-clip-text peer-focus:!text-transparent peer-not-placeholder-shown:!text-transparent peer-not-placeholder-shown:bg-[linear-gradient(135deg,_#fb7185_0%,_#f97316_100%)] peer-focus:bg-[linear-gradient(135deg,_#fb7185_0%,_#f97316_100%)] text-sm"
-                  >
+                  <label htmlFor="password" className="text-sm">
                     Password
                   </label>
                 </div>
                 <button
                   type="button"
-                  className="cursor-pointer absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-rose-500 transition-colors duration-200"
+                  className="cursor-pointer absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 transition-colors duration-200"
                   tabIndex={-1}
                   aria-label="Toggle password visibility"
                   onClick={togglePassword}
@@ -283,7 +281,7 @@ const AuthModal = ({
                   ) : (
                     <svg
                       id="eyeIcon"
-                      className="w-5 h-5"
+                      className="w-5 h-5 peer-hover:text-primary"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -370,8 +368,8 @@ const AuthModal = ({
               </Button>
               <Button
                 type="submit"
-                className="py-4 text-sm disabled:opacity-50"
-                variant="elegant"
+                className="flex items-center justify-center py-4 text-sm disabled:opacity-50 flex-1"
+                variant="secondary"
                 size="md"
                 disabled={!status.valid}
               >
