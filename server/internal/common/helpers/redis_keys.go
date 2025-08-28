@@ -8,6 +8,7 @@ import (
 type KeyType string
 
 const (
+	AuthKeyTypeJWT    KeyType = "auth:jwt"
 	AuthKeyTypeSig    KeyType = "auth:sig"
 	RequestKeyTypeSig KeyType = "req:sig"
 )

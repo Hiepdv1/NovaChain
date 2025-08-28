@@ -7,6 +7,17 @@ INSERT INTO wallets (
     $4, $5, $6
 ) RETURNING *;
 
+-- name: UpdateWalletInfoByWalletID :one
+UPDATE wallets
+SET
+    public_key = COALESCE(NULLIF(sqlc.narg('public_key')::text, ''), public_key),
+    public_key_hash = COALESCE(NULLIF(sqlc.narg('public_key_hash')::text, ''), public_key_hash),
+    balance = COALESCE(NULLIF(sqlc.narg('balance')::text, ''), balance),
+    address = COALESCE(NULLIF(sqlc.narg('address')::text, ''), address),
+    last_login = now()
+WHERE id =  @id
+RETURNING *;
+
 -- name: ExistsWalletByAddrAndPubkey :one
 SELECT EXISTS(SELECT 1 FROM wallets WHERE address = $1 AND public_key = $2);
 
@@ -23,6 +34,11 @@ SELECT * FROM wallets WHERE public_key_hash = $1 LIMIT 1;
 UPDATE wallets
 SET balance = balance + $1
 WHERE address = $2 AND public_key = $3;
+
+-- name: IncreaseWalletBalanceByPubKeyHash :exec
+UPDATE wallets
+SET balance = balance + $1
+WHERE public_key_hash = $2;
 
 -- name: DecreaseWalletBalance :exec
 UPDATE wallets

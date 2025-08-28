@@ -234,6 +234,63 @@ func (q *Queries) IncreaseWalletBalance(ctx context.Context, arg IncreaseWalletB
 	return err
 }
 
+const increaseWalletBalanceByPubKeyHash = `-- name: IncreaseWalletBalanceByPubKeyHash :exec
+UPDATE wallets
+SET balance = balance + $1
+WHERE public_key_hash = $2
+`
+
+type IncreaseWalletBalanceByPubKeyHashParams struct {
+	Balance       string
+	PublicKeyHash string
+}
+
+func (q *Queries) IncreaseWalletBalanceByPubKeyHash(ctx context.Context, arg IncreaseWalletBalanceByPubKeyHashParams) error {
+	_, err := q.db.ExecContext(ctx, increaseWalletBalanceByPubKeyHash, arg.Balance, arg.PublicKeyHash)
+	return err
+}
+
+const updateWalletInfoByWalletID = `-- name: UpdateWalletInfoByWalletID :one
+UPDATE wallets
+SET
+    public_key = COALESCE(NULLIF($1::text, ''), public_key),
+    public_key_hash = COALESCE(NULLIF($2::text, ''), public_key_hash),
+    balance = COALESCE(NULLIF($3::text, ''), balance),
+    address = COALESCE(NULLIF($4::text, ''), address),
+    last_login = now()
+WHERE id =  $5
+RETURNING id, address, public_key, public_key_hash, balance, create_at, last_login
+`
+
+type UpdateWalletInfoByWalletIDParams struct {
+	PublicKey     sql.NullString
+	PublicKeyHash sql.NullString
+	Balance       sql.NullString
+	Address       sql.NullString
+	ID            uuid.UUID
+}
+
+func (q *Queries) UpdateWalletInfoByWalletID(ctx context.Context, arg UpdateWalletInfoByWalletIDParams) (Wallet, error) {
+	row := q.db.QueryRowContext(ctx, updateWalletInfoByWalletID,
+		arg.PublicKey,
+		arg.PublicKeyHash,
+		arg.Balance,
+		arg.Address,
+		arg.ID,
+	)
+	var i Wallet
+	err := row.Scan(
+		&i.ID,
+		&i.Address,
+		&i.PublicKey,
+		&i.PublicKeyHash,
+		&i.Balance,
+		&i.CreateAt,
+		&i.LastLogin,
+	)
+	return i, err
+}
+
 const updateWalletLastLogin = `-- name: UpdateWalletLastLogin :exec
 UPDATE wallets
 SET last_login = now()

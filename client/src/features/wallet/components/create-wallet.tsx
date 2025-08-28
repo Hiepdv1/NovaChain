@@ -17,6 +17,7 @@ import {
 } from '@/lib/crypto/wallet.crypto';
 import NoticeBox from './notice-box';
 import { WalletSignaturePayload } from '../types/wallet';
+import useWalletContext from '@/components/providers/wallet-provider';
 
 interface CreateWallet {
   showModalByName(modelName: ModalName): void;
@@ -43,11 +44,8 @@ const CreateWalletForm = ({ showModalByName, onStepUpdate }: CreateWallet) => {
     pubKey: '',
   });
   const router = useRouter();
+  const { refetch } = useWalletContext();
   const walletConnect = useWalletConnect();
-
-  const onBackToHome = useCallback(() => {
-    router.push('/');
-  }, [router]);
 
   const onBackCreatePassword = useCallback(() => {
     showModalByName('Welcome');
@@ -149,6 +147,16 @@ const CreateWalletForm = ({ showModalByName, onStepUpdate }: CreateWallet) => {
         toast.error('Failed to copy');
       });
   }, []);
+
+  const onBackToHome = useCallback(async () => {
+    await refetch();
+    router.push('/');
+  }, [router, refetch]);
+
+  const onAccessWallet = useCallback(async () => {
+    await refetch();
+    router.push('/wallet/me');
+  }, [router, refetch]);
 
   return (
     <Fragment>
@@ -284,7 +292,7 @@ const CreateWalletForm = ({ showModalByName, onStepUpdate }: CreateWallet) => {
             />
 
             <div className="mt-8 space-y-3">
-              <Button variant="glass" size="md">
+              <Button onClick={onAccessWallet} variant="glass" size="md">
                 <div className="flex items-center justify-center text-[14px]">
                   <span>Access wallet</span>
                   <svg

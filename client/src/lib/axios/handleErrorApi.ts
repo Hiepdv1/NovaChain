@@ -8,11 +8,15 @@ export function handleApiError(error: unknown): BaseErrorResponse {
       err.response?.data || {
         success: false,
         message: err.message || 'Unknown error',
+        name: error.name,
+        statusCode: err.response?.data?.statusCode || 500,
       }
     );
   }
   return {
     success: false,
+    name: (error as Error).name,
     message: 'Unexpected error occurred',
+    statusCode: 500,
   };
 }

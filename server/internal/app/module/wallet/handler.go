@@ -5,6 +5,7 @@ import (
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/env"
 	"ChainServer/internal/common/response"
+	"ChainServer/internal/common/utils"
 	"encoding/hex"
 
 	"github.com/gofiber/fiber/v2"
@@ -78,10 +79,37 @@ func (h *WalletHandler) ImportWallet(c *fiber.Ctx) error {
 	)
 }
 
-func (h *WalletHandler) GetMe(c *fiber.Ctx) error {
-	data := c.Locals("wallet").(JWTWalletAuthPayload)
+func (h *WalletHandler) Disconnect(c *fiber.Ctx) error {
+	payload, ok := c.Locals("wallet").(*utils.JWTPayload[JWTWalletAuthPayload])
+	token := c.Cookies(config.CookieAccessToken)
 
-	pubkey, err := hex.DecodeString(data.Pubkey)
+	if !ok || token == "" {
+		return response.Error(
+			c,
+			fiber.StatusInternalServerError,
+			"Something went wrong. Please try again.",
+			response.ErrInternal,
+			nil,
+		)
+	}
+
+	h.service.Disconnect(token, *payload)
+
+	c.ClearCookie(config.CookieAccessToken, "/", env.Cfg.Domain_Client)
+
+	return response.Success(
+		c,
+		nil,
+		"wallet disconnected successfully",
+		fiber.StatusOK,
+	)
+
+}
+
+func (h *WalletHandler) GetMe(c *fiber.Ctx) error {
+	payload := c.Locals("wallet").(*utils.JWTPayload[JWTWalletAuthPayload])
+
+	pubkey, err := hex.DecodeString(payload.Data.Pubkey)
 
 	if err != nil {
 		return response.Error(

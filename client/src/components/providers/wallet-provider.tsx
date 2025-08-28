@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react';
 import { useWalletQuery } from '@/features/wallet/hook/useWalletQuery';
+import RootLoader from '@/components/loading/root';
 
 const WalletContext = createContext<ReturnType<typeof useWalletQuery> | null>(
   null,
@@ -13,6 +14,10 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
     refetchOnReconnect: false,
     refetchOnMount: false,
   });
+
+  if (walletQuery.isLoading) {
+    return <RootLoader />;
+  }
 
   return (
     <WalletContext.Provider value={walletQuery}>

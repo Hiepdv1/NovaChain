@@ -43,7 +43,7 @@ func InitEnv() {
 			Wallet_Signature_Expiry_Minutes: GetEnvAsInt("WALLET_SIGNATURE_EXPIRY_MINUTES", 1),
 			Jwt_Secret_Key:                  GetEnvAsString("JWT_SECRET_KEY", "default_secret_key"),
 			Jwt_TTL_Minutes:                 GetEnvAsInt("JWT_TTL_MINUTES", 1800),
-			Domain_Client:                   GetEnvAsString("DOMAIN_CLIENT", ""),
+			Domain_Client:                   GetEnvAsString("DOMAIN_CLIENT", "localhost"),
 		}
 	})
 }

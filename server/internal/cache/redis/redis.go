@@ -112,7 +112,7 @@ func getDefaultTTL(namespace CacheNamespace) time.Duration {
 }
 
 func Set(ctx context.Context, key CacheKey, value any, ttl ...time.Duration) error {
-	data, err := utils.GubEncode(value)
+	data, err := utils.GobEncode(value)
 	if err != nil {
 		return err
 	}

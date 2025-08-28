@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"ChainServer/internal/cache/redis"
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/middlewares"
 
@@ -14,7 +15,8 @@ type WalletRoutes struct {
 
 func NewWalletRoutes(rpcRepo RPCWalletRepository, dbRepo DBWalletRepository) *WalletRoutes {
 
-	service := NewWalletService(rpcRepo, dbRepo)
+	cacheRepo := NewWalletCacheRepository(redis.Client)
+	service := NewWalletService(rpcRepo, dbRepo, cacheRepo)
 	handler := NewWalletHandler(service)
 
 	return &WalletRoutes{handler: handler}
@@ -41,4 +43,5 @@ func (r *WalletRoutes) RegisterPrivate(router fiber.Router) {
 	)
 
 	privateGroup.Get("/me", r.handler.GetMe)
+	privateGroup.Post("/disconnect", r.handler.Disconnect)
 }

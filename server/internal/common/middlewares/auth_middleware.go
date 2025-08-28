@@ -85,7 +85,34 @@ func JWTAuthMiddleware[T any](c *fiber.Ctx) error {
 		return response.Error(
 			c,
 			fiber.StatusUnauthorized,
-			"Unauthorized: No token provided",
+			"Access denied: missing token",
+			response.ErrUnauthorized,
+			nil,
+		)
+	}
+
+	exists, err := redis.Exists(
+		context.Background(),
+		helpers.BlacklistSigKey(helpers.AuthKeyTypeJWT, token),
+	)
+
+	if err != nil {
+		log.Errorf("Check blacklist token error: %v", err)
+
+		return response.Error(
+			c,
+			fiber.StatusInternalServerError,
+			"Server error: failed to validate token",
+			response.ErrInternal,
+			nil,
+		)
+	}
+
+	if exists {
+		return response.Error(
+			c,
+			fiber.StatusUnauthorized,
+			"Access denied: token has been revoked",
 			response.ErrUnauthorized,
 			nil,
 		)
@@ -100,13 +127,13 @@ func JWTAuthMiddleware[T any](c *fiber.Ctx) error {
 		return response.Error(
 			c,
 			fiber.StatusUnauthorized,
-			fmt.Sprintf("Unauthorized: %s", err.Error()),
+			fmt.Sprintf("Invalid or expired token: %s", err.Error()),
 			response.ErrUnauthorized,
 			err,
 		)
 	}
 
-	c.Locals("wallet", payload.Data)
+	c.Locals("wallet", payload)
 
 	return c.Next()
 }

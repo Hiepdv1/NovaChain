@@ -12,21 +12,22 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
 type WalletService struct {
-	rpcRepo RPCWalletRepository
-	dbRepo  DBWalletRepository
+	rpcRepo   RPCWalletRepository
+	dbRepo    DBWalletRepository
+	cacheRepo CacheWalletRepository
 }
 
-func NewWalletService(rpcRepo RPCWalletRepository, dbRepo DBWalletRepository) *WalletService {
+func NewWalletService(rpcRepo RPCWalletRepository, dbRepo DBWalletRepository, cacheRepo CacheWalletRepository) *WalletService {
 	return &WalletService{
-		rpcRepo: rpcRepo,
-		dbRepo:  dbRepo,
+		rpcRepo:   rpcRepo,
+		dbRepo:    dbRepo,
+		cacheRepo: cacheRepo,
 	}
 }
 
@@ -36,16 +37,13 @@ func (s *WalletService) CreateWallet(dto *dto.WalletParsed) (*string, *apperror.
 
 	errInternalCommon := apperror.Internal("Something went wrong. Please try again.", nil)
 
-	existingWallet, err := s.dbRepo.ExistsWalletByPubKey(ctx, dto.PublicKey)
+	existingWallet, err := s.dbRepo.ExistsWalletByPubKey(ctx, dto.PublicKey, nil)
 
 	if existingWallet {
 		return nil, apperror.BadRequest("Wallet already exists", nil)
 	}
 
 	if err != nil {
-		if apperr, ok := err.(*apperror.AppError); ok {
-			return nil, apperr
-		}
 		log.Error("Failed to check if wallet exists: ", err)
 		return nil, errInternalCommon
 	}
@@ -54,7 +52,7 @@ func (s *WalletService) CreateWallet(dto *dto.WalletParsed) (*string, *apperror.
 		PublicKey:     hex.EncodeToString(dto.PublicKey),
 		Address:       dto.Addr,
 		PublicKeyHash: hex.EncodeToString(utils.PublicKeyHash(dto.PublicKey)),
-		Balance:       fmt.Sprintf("%.8f", 0.000000000),
+		Balance:       "0",
 		CreateAt: sql.NullTime{
 			Time:  time.Now(),
 			Valid: true,
@@ -109,7 +107,9 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 
 	errInternalCommon := apperror.Internal("Something went wrong. Please try again.", nil)
 
-	wallet, err := s.dbRepo.GetWalletByPubkey(ctx, dto.PublicKey)
+	pubKeyHash := hex.EncodeToString(utils.PublicKeyHash(dto.PublicKey))
+
+	wallet, err := s.dbRepo.GetWalletByPubKeyHash(ctx, pubKeyHash, nil)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			balance, err := s.rpcRepo.GetBalance(dto.Addr)
@@ -124,10 +124,10 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 			}
 
 			newWallet, err := s.dbRepo.CreateWallet(ctx, dbwallet.CreateWalletParams{
+				PublicKey:     hex.EncodeToString(dto.PublicKey),
 				Address:       dto.Addr,
-				PublicKey:     string(dto.PublicKey),
-				PublicKeyHash: string(utils.PublicKeyHash(dto.PublicKey)),
-				Balance:       fmt.Sprintf("%.8f", balance.Balance),
+				PublicKeyHash: pubKeyHash,
+				Balance:       helpers.FormatDecimal(balance.Balance, 8),
 				CreateAt: sql.NullTime{
 					Time:  time.Now(),
 					Valid: true,
@@ -149,6 +149,22 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 			log.Error("Database query wallet failed", err)
 			return nil, errInternalCommon
 		}
+	}
+
+	if wallet.Address == "-" || wallet.PublicKey == "-" {
+		walletUpdated, err := s.dbRepo.UpdateWalletInfoByWalletID(ctx, dbwallet.UpdateWalletInfoByWalletIDParams{
+			PublicKey:     sql.NullString{String: hex.EncodeToString(dto.PublicKey), Valid: true},
+			PublicKeyHash: sql.NullString{String: pubKeyHash, Valid: true},
+			Balance:       sql.NullString{Valid: false},
+			Address:       sql.NullString{String: "0x123...", Valid: true},
+			ID:            wallet.ID,
+		}, nil)
+
+		if err != nil {
+			return nil, errInternalCommon
+		}
+
+		wallet = walletUpdated
 	}
 
 	payload := JWTWalletAuthPayload{
@@ -183,8 +199,37 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 	return &token, nil
 }
 
+func (s *WalletService) Disconnect(token string, payload utils.JWTPayload[JWTWalletAuthPayload]) {
+	ttl := time.Until(payload.ExpiresAt.Time) + 2*time.Minute
+
+	if ttl <= 0 {
+		ttl = 2 * time.Minute
+	}
+
+	err := redis.Set(context.Background(),
+		helpers.BlacklistSigKey(helpers.AuthKeyTypeJWT, token),
+		"blacklisted",
+		ttl,
+	)
+	if err != nil {
+		log.Errorf("Failed set blacklist token %s: %v", token, err)
+	}
+}
+
 func (s *WalletService) GetWallet(pubkey []byte) (*dbwallet.Wallet, *apperror.AppError) {
-	wallet, err := s.dbRepo.GetWalletByPubkey(context.Background(), pubkey)
+	ctx := context.Background()
+
+	key := hex.EncodeToString(pubkey)
+
+	walletCache, err := s.cacheRepo.GetWalletById(ctx, key)
+
+	if err != nil {
+		log.Errorf("Failed to get wallet cache with pubKey %s: %v", key, err)
+	} else {
+		return walletCache, nil
+	}
+
+	wallet, err := s.dbRepo.GetWalletByPubkey(ctx, pubkey, nil)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -193,6 +238,12 @@ func (s *WalletService) GetWallet(pubkey []byte) (*dbwallet.Wallet, *apperror.Ap
 
 		log.Error("Get wallet failed ", err)
 		return nil, apperror.Internal("Something went wrong. Please try again.", nil)
+	}
+
+	err = s.cacheRepo.AddWallet(ctx, *wallet)
+
+	if err != nil {
+		log.Errorf("Failed to set wallet cache with pubKey %s: %v", key, err)
 	}
 
 	return wallet, nil

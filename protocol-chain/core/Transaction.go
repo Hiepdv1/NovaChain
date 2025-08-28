@@ -236,22 +236,21 @@ func (tx *Transaction) String() string {
 	return strings.Join(lines, "\n")
 }
 
-func InitGenesisTx(data string) *Transaction {
-	if data == "" {
-		randData := make([]byte, 24)
-		_, err := rand.Read(randData)
-		utils.ErrorHandle(err)
+func InitGenesisTx() *Transaction {
 
-		data = fmt.Sprintf("%x", randData)
+	pubkey, err := hex.DecodeString("35c65154f5407780a2b5e5303fb52d46092a1c4f08ffa8a20c08ed007869af3c9873d5c743aeb610de7ba56fa338ac22a8d863d0f7b67cad3eee653ea2f93e61")
+
+	if err != nil {
+		log.Panicf("Failed to decode pubKey: %v", err)
 	}
 
 	txIn := TxInput{
 		ID:        []byte{},
 		Out:       -1,
 		Signature: nil,
-		PubKey:    []byte(data),
+		PubKey:    pubkey,
 	}
-	txOut := NewTxOutput(1_111_111, "1EfKZzesCJgahgUuWMKUneQ9ymuCTtbTA2")
+	txOut := NewTxOutput(1_111_111, "13eQHPE45d95ayyVoxduzPDt13GWF5is1Q")
 
 	tx := Transaction{
 		ID:      nil,

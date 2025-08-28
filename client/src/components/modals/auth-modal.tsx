@@ -11,6 +11,7 @@ import {
 } from '@/lib/crypto/wallet.crypto';
 import { buildSignatureWallet } from '@/features/wallet/helpers/wallet-helper';
 import { useWalletImport } from '@/features/wallet/hook/useWalletQuery';
+import useWalletContext from '../providers/wallet-provider';
 
 interface AuthModalProps extends ReAuthModal {
   closeModal: () => void;
@@ -39,6 +40,7 @@ const AuthModal = ({
   });
   const router = useRouter();
   const walletImport = useWalletImport();
+  const { refetch } = useWalletContext();
 
   const togglePassword = () => {
     const input = inputRef.current;
@@ -142,7 +144,7 @@ const AuthModal = ({
             isConfirm: false,
           });
           useModalStore.getState().actions.closeModal();
-          router.refresh();
+          refetch();
         },
       },
     );

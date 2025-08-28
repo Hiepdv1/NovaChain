@@ -6,17 +6,17 @@ import (
 	"encoding/json"
 )
 
-type rpcWalletRepository struct {
+type walletRPCRepository struct {
 	env *env.Env
 }
 
 func NewRPCWalletRepository() RPCWalletRepository {
-	return &rpcWalletRepository{
+	return &walletRPCRepository{
 		env: env.Cfg,
 	}
 }
 
-func (r *rpcWalletRepository) GetBalance(address string) (*Balance, error) {
+func (r *walletRPCRepository) GetBalance(address string) (*Balance, error) {
 
 	params := []any{
 		map[string]string{

@@ -3,6 +3,7 @@ package blocksync
 import (
 	"ChainServer/internal/app/module/chain"
 	"ChainServer/internal/app/module/transaction"
+	"ChainServer/internal/common/utils"
 	"ChainServer/internal/db"
 	dbchain "ChainServer/internal/db/chain"
 	dbwallet "ChainServer/internal/db/wallet"
@@ -28,6 +29,12 @@ func StringPtrToNullString(s *string) sql.NullString {
 func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash string, tx *sql.Tx) error {
 	ctx := context.Background()
 	for _, in := range ins {
+		pubkey, err := hex.DecodeString(in.PubKey)
+
+		if err != nil {
+			return err
+		}
+
 		args := dbchain.CreateTxInputParams{
 			TxID:      txHash,
 			InputTxID: in.ID,
@@ -44,9 +51,31 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 
 		if in.PubKey != "" {
 
-			wallet, err := j.dbWallet.GetWalletByPubkey(ctx, []byte(in.PubKey))
+			wallet, err := j.dbWallet.GetWalletByPubkey(ctx, []byte(in.PubKey), tx)
 			if err != nil && errors.Is(err, sql.ErrNoRows) {
-				continue
+				log.Info("No wallet, Create Wallet in tx_input")
+				newWallet, err := j.dbWallet.CreateWallet(
+					ctx,
+					dbwallet.CreateWalletParams{
+						Address:       string(utils.PubKeyToAddress(pubkey)),
+						PublicKey:     in.PubKey,
+						PublicKeyHash: hex.EncodeToString(utils.PublicKeyHash(pubkey)),
+						Balance:       "0",
+						CreateAt: sql.NullTime{
+							Time:  time.Now(),
+							Valid: true,
+						},
+						LastLogin: sql.NullTime{
+							Time:  time.Now(),
+							Valid: true,
+						},
+					},
+					tx,
+				)
+				if err != nil {
+					return err
+				}
+				wallet = &newWallet
 			} else if err != nil {
 				return err
 			}
@@ -56,7 +85,12 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 				Index: in.Out,
 			})
 
-			if err != nil {
+			if err != nil && errors.Is(err, sql.ErrNoRows) {
+				// block genesis or block reward
+				txoutput = dbchain.TxOutput{
+					Value: "0",
+				}
+			} else if err != nil {
 				return err
 			}
 
@@ -84,6 +118,35 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 func (j *jobBlockSync) handleCreateOutput(outs []transaction.TxOutput, txHash string, tx *sql.Tx) error {
 	ctx := context.Background()
 	for Index, out := range outs {
+		wallet, err := j.dbWallet.GetWalletByPubKeyHash(ctx, out.PubKeyHash, tx)
+		if err != nil && errors.Is(err, sql.ErrNoRows) {
+			log.Info("No wallet, Create Wallet in tx_outputs")
+			newWallet, err := j.dbWallet.CreateWallet(
+				ctx,
+				dbwallet.CreateWalletParams{
+					Address:       "-",
+					PublicKey:     "-",
+					PublicKeyHash: out.PubKeyHash,
+					Balance:       "0",
+					CreateAt: sql.NullTime{
+						Time:  time.Now(),
+						Valid: true,
+					},
+					LastLogin: sql.NullTime{
+						Time:  time.Now(),
+						Valid: true,
+					},
+				},
+				tx,
+			)
+			if err != nil {
+				return err
+			}
+			wallet = &newWallet
+		} else if err != nil {
+			return err
+		}
+
 		args := dbchain.CreateTxOutputParams{
 			TxID:       txHash,
 			Value:      fmt.Sprintf("%.8f", out.Value),
@@ -98,23 +161,17 @@ func (j *jobBlockSync) handleCreateOutput(outs []transaction.TxOutput, txHash st
 
 		log.Infof("Sync new TxOutput: %v", txout)
 
-		if out.PubKeyHash != "" {
-			wallet, err := j.dbWallet.GetWalletByPubKeyHash(ctx, out.PubKeyHash)
-			if err != nil && errors.Is(err, sql.ErrNoRows) {
-				continue
-			} else if err != nil {
-				return err
-			}
+		err = j.dbWallet.IncreaseWalletBalanceByPubKeyHash(
+			ctx,
+			dbwallet.IncreaseWalletBalanceByPubKeyHashParams{
+				Balance:       fmt.Sprintf("%.8f", out.Value),
+				PublicKeyHash: wallet.PublicKeyHash,
+			},
+			tx,
+		)
 
-			err = j.dbWallet.IncreaseWalletBalance(ctx, dbwallet.IncreaseWalletBalanceParams{
-				Balance:   fmt.Sprintf("%.8f", out.Value),
-				Address:   wallet.Address,
-				PublicKey: wallet.PublicKey,
-			}, tx)
-
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
 
 	}
@@ -231,7 +288,7 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 						return fmt.Errorf("failed to decode pubkey: %v", err)
 					}
 
-					wallet, err := j.dbWallet.GetWalletByPubkey(ctx, pubkey)
+					wallet, err := j.dbWallet.GetWalletByPubkey(ctx, pubkey, sqlTx)
 					if err != nil && errors.Is(err, sql.ErrNoRows) {
 						continue
 					} else if err != nil {
@@ -265,7 +322,7 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 
 			for _, output := range txOutputs {
 				if output.PubKeyHash != "" {
-					wallet, err := j.dbWallet.GetWalletByPubKeyHash(ctx, output.PubKeyHash)
+					wallet, err := j.dbWallet.GetWalletByPubKeyHash(ctx, output.PubKeyHash, sqlTx)
 					if err != nil && errors.Is(err, sql.ErrNoRows) {
 						continue
 					} else if err != nil {

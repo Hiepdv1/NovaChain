@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func GubEncode[T any](value T) ([]byte, error) {
+func GobEncode[T any](value T) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	if err := enc.Encode(value); err != nil {

@@ -7,7 +7,6 @@ import {
   WalletQueryOptions,
 } from '../types/wallet';
 import walletService from '../services/wallet.service';
-import { error } from 'console';
 
 export const useWalletConnect = () => {
   return useMutation<
@@ -37,5 +36,11 @@ export const useWalletQuery = (opts?: WalletQueryOptions) => {
       return res.data;
     },
     ...opts,
+  });
+};
+
+export const useDisconnectWalletMutation = () => {
+  return useMutation<BaseResponse<null>, BaseErrorResponse, null>({
+    mutationFn: walletService.Disconnect,
   });
 };

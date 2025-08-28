@@ -14,21 +14,17 @@ const WalletLayout = ({
 }>) => {
   const router = useRouter();
 
-  const { data, isLoading } = useWalletContext();
+  const { isLoading, error } = useWalletContext();
 
   useEffect(() => {
-    if (data) {
+    if (error && error?.statusCode !== 401) {
       router.push('/');
     }
-  }, [data, router]);
-
-  if (isLoading) {
-    return null;
-  }
+  }, [router, error]);
 
   return (
     <Fragment>
-      {!isLoading && !data && (
+      {!isLoading && (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-wallet-gradient bg-[400%,400%]! animate-gradient-shift ">
           <Floating />
           <Particle />

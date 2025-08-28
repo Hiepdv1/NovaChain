@@ -35,6 +35,17 @@ class WalletService {
       throw handleApiError(err);
     }
   }
+
+  public async Disconnect() {
+    try {
+      const res = await http.post<BaseResponse<null>>(
+        '/wallet/__pri/disconnect',
+      );
+      return res.data;
+    } catch (err) {
+      throw handleApiError(err);
+    }
+  }
 }
 
 const walletService = new WalletService();

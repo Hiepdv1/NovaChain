@@ -34,7 +34,6 @@ const (
 	MaxDifficultyChange = 0.2
 	CheckpointInterval  = 10
 	BestHeightPrefix    = "lh"
-	genesisData         = "genesis"
 	CheckpointPrefix    = "checkpoint-"
 )
 
@@ -85,7 +84,7 @@ func InitBlockchain(instanceId string) *Blockchain {
 	utils.ErrorHandle(err)
 
 	err = db.Update(func(txn *badger.Txn) error {
-		cbtx := InitGenesisTx(genesisData)
+		cbtx := InitGenesisTx()
 		log.Info("No existing blockchain found")
 
 		genesis := Genesis(cbtx)
