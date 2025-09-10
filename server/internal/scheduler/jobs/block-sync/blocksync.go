@@ -3,6 +3,7 @@ package blocksync
 import (
 	"ChainServer/internal/app/module/chain"
 	"ChainServer/internal/app/module/transaction"
+	"ChainServer/internal/app/module/utxo"
 	"ChainServer/internal/app/module/wallet"
 	"time"
 
@@ -19,6 +20,7 @@ type jobBlockSync struct {
 	dbTrans    transaction.DbTransactionRepository
 	dbChainRpc chain.RPCChainRepository
 	dbWallet   wallet.DBWalletRepository
+	dbUtxo     utxo.DbUTXORepository
 }
 
 func NewJobBlockSync(
@@ -27,6 +29,7 @@ func NewJobBlockSync(
 	dbTrans transaction.DbTransactionRepository,
 	dbChainRpc chain.RPCChainRepository,
 	dbWallet wallet.DBWalletRepository,
+	dbUtxo utxo.DbUTXORepository,
 ) JobBlockSync {
 	return &jobBlockSync{
 		interval:   interval,
@@ -34,6 +37,7 @@ func NewJobBlockSync(
 		dbTrans:    dbTrans,
 		dbChainRpc: dbChainRpc,
 		dbWallet:   dbWallet,
+		dbUtxo:     dbUtxo,
 	}
 }
 

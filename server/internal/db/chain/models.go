@@ -33,10 +33,11 @@ type Transaction struct {
 type TxInput struct {
 	ID        uuid.UUID
 	TxID      string
-	InputTxID string
+	InputTxID sql.NullString
 	OutIndex  int64
-	Sig       string
-	PubKey    string
+	Sig       sql.NullString
+	BID       string
+	PubKey    sql.NullString
 }
 
 type TxOutput struct {
@@ -44,5 +45,6 @@ type TxOutput struct {
 	TxID       string
 	Index      int64
 	Value      string
+	BID        string
 	PubKeyHash string
 }

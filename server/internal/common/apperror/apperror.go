@@ -26,7 +26,7 @@ func New(message string, errType response.ErrorType, status uint, err error) *Ap
 	}
 }
 
-func (apperr *AppError) Reponse(c *fiber.Ctx) error {
+func (apperr *AppError) Response(c *fiber.Ctx) error {
 	traceID := response.GetTraceID(c)
 
 	res := response.ResponseBody{

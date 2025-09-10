@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"ChainServer/internal/scheduler/jobs/blocksync"
+	blocksync "ChainServer/internal/scheduler/jobs/block-sync"
 
 	log "github.com/sirupsen/logrus"
 )

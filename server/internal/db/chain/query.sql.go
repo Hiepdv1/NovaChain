@@ -84,16 +84,17 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 }
 
 const createTxInput = `-- name: CreateTxInput :one
-insert into tx_inputs (tx_id, input_tx_id, out_index, sig, pub_key)
-values ($1, $2, $3, $4, $5) returning id, tx_id, input_tx_id, out_index, sig, pub_key
+insert into tx_inputs (tx_id, input_tx_id, out_index, sig, b_id, pub_key)
+values ($1, $2, $3, $4, $5, $6) returning id, tx_id, input_tx_id, out_index, sig, b_id, pub_key
 `
 
 type CreateTxInputParams struct {
 	TxID      string
-	InputTxID string
+	InputTxID sql.NullString
 	OutIndex  int64
-	Sig       string
-	PubKey    string
+	Sig       sql.NullString
+	BID       string
+	PubKey    sql.NullString
 }
 
 func (q *Queries) CreateTxInput(ctx context.Context, arg CreateTxInputParams) (TxInput, error) {
@@ -102,6 +103,7 @@ func (q *Queries) CreateTxInput(ctx context.Context, arg CreateTxInputParams) (T
 		arg.InputTxID,
 		arg.OutIndex,
 		arg.Sig,
+		arg.BID,
 		arg.PubKey,
 	)
 	var i TxInput
@@ -111,20 +113,22 @@ func (q *Queries) CreateTxInput(ctx context.Context, arg CreateTxInputParams) (T
 		&i.InputTxID,
 		&i.OutIndex,
 		&i.Sig,
+		&i.BID,
 		&i.PubKey,
 	)
 	return i, err
 }
 
 const createTxOutput = `-- name: CreateTxOutput :one
-insert into tx_outputs (tx_id, value, pub_key_hash, index)
-values ($1, $2, $3, $4) returning id, tx_id, index, value, pub_key_hash
+insert into tx_outputs (tx_id, value, pub_key_hash, b_id, index)
+values ($1, $2, $3, $4, $5) returning id, tx_id, index, value, b_id, pub_key_hash
 `
 
 type CreateTxOutputParams struct {
 	TxID       string
 	Value      string
 	PubKeyHash string
+	BID        string
 	Index      int64
 }
 
@@ -133,6 +137,7 @@ func (q *Queries) CreateTxOutput(ctx context.Context, arg CreateTxOutputParams) 
 		arg.TxID,
 		arg.Value,
 		arg.PubKeyHash,
+		arg.BID,
 		arg.Index,
 	)
 	var i TxOutput
@@ -141,6 +146,7 @@ func (q *Queries) CreateTxOutput(ctx context.Context, arg CreateTxOutputParams) 
 		&i.TxID,
 		&i.Index,
 		&i.Value,
+		&i.BID,
 		&i.PubKeyHash,
 	)
 	return i, err
@@ -154,6 +160,75 @@ where b_id = $1
 func (q *Queries) DeleteBlockByBID(ctx context.Context, bID string) error {
 	_, err := q.db.ExecContext(ctx, deleteBlockByBID, bID)
 	return err
+}
+
+const findListTxOutputByBlockID = `-- name: FindListTxOutputByBlockID :many
+select id, tx_id, index, value, b_id, pub_key_hash from tx_outputs where b_id = $1
+`
+
+func (q *Queries) FindListTxOutputByBlockID(ctx context.Context, bID string) ([]TxOutput, error) {
+	rows, err := q.db.QueryContext(ctx, findListTxOutputByBlockID, bID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TxOutput
+	for rows.Next() {
+		var i TxOutput
+		if err := rows.Scan(
+			&i.ID,
+			&i.TxID,
+			&i.Index,
+			&i.Value,
+			&i.BID,
+			&i.PubKeyHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findTxInputByBlockID = `-- name: FindTxInputByBlockID :many
+select id, tx_id, input_tx_id, out_index, sig, b_id, pub_key from tx_inputs where b_id = $1
+`
+
+func (q *Queries) FindTxInputByBlockID(ctx context.Context, bID string) ([]TxInput, error) {
+	rows, err := q.db.QueryContext(ctx, findTxInputByBlockID, bID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TxInput
+	for rows.Next() {
+		var i TxInput
+		if err := rows.Scan(
+			&i.ID,
+			&i.TxID,
+			&i.InputTxID,
+			&i.OutIndex,
+			&i.Sig,
+			&i.BID,
+			&i.PubKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getBlockByBID = `-- name: GetBlockByBID :one
@@ -384,7 +459,7 @@ func (q *Queries) GetListTransactions(ctx context.Context, arg GetListTransactio
 }
 
 const getListTxInputByTxID = `-- name: GetListTxInputByTxID :many
-select id, tx_id, input_tx_id, out_index, sig, pub_key from tx_inputs where tx_id = $1
+select id, tx_id, input_tx_id, out_index, sig, b_id, pub_key from tx_inputs where tx_id = $1
 `
 
 func (q *Queries) GetListTxInputByTxID(ctx context.Context, txID string) ([]TxInput, error) {
@@ -402,6 +477,7 @@ func (q *Queries) GetListTxInputByTxID(ctx context.Context, txID string) ([]TxIn
 			&i.InputTxID,
 			&i.OutIndex,
 			&i.Sig,
+			&i.BID,
 			&i.PubKey,
 		); err != nil {
 			return nil, err
@@ -418,7 +494,7 @@ func (q *Queries) GetListTxInputByTxID(ctx context.Context, txID string) ([]TxIn
 }
 
 const getListTxOutputByTxId = `-- name: GetListTxOutputByTxId :many
-select id, tx_id, index, value, pub_key_hash from tx_outputs where tx_id = $1
+select id, tx_id, index, value, b_id, pub_key_hash from tx_outputs where tx_id = $1
 `
 
 func (q *Queries) GetListTxOutputByTxId(ctx context.Context, txID string) ([]TxOutput, error) {
@@ -435,6 +511,7 @@ func (q *Queries) GetListTxOutputByTxId(ctx context.Context, txID string) ([]TxO
 			&i.TxID,
 			&i.Index,
 			&i.Value,
+			&i.BID,
 			&i.PubKeyHash,
 		); err != nil {
 			return nil, err
@@ -467,7 +544,7 @@ func (q *Queries) GetTransactionByTxID(ctx context.Context, txID string) (Transa
 }
 
 const getTxInputByTxID = `-- name: GetTxInputByTxID :one
-select id, tx_id, input_tx_id, out_index, sig, pub_key from tx_inputs where tx_id = $1 limit 1
+select id, tx_id, input_tx_id, out_index, sig, b_id, pub_key from tx_inputs where tx_id = $1 limit 1
 `
 
 func (q *Queries) GetTxInputByTxID(ctx context.Context, txID string) (TxInput, error) {
@@ -479,13 +556,14 @@ func (q *Queries) GetTxInputByTxID(ctx context.Context, txID string) (TxInput, e
 		&i.InputTxID,
 		&i.OutIndex,
 		&i.Sig,
+		&i.BID,
 		&i.PubKey,
 	)
 	return i, err
 }
 
 const getTxOutputByTxID = `-- name: GetTxOutputByTxID :one
-select id, tx_id, index, value, pub_key_hash from tx_outputs where tx_id = $1 limit 1
+select id, tx_id, index, value, b_id, pub_key_hash from tx_outputs where tx_id = $1 limit 1
 `
 
 func (q *Queries) GetTxOutputByTxID(ctx context.Context, txID string) (TxOutput, error) {
@@ -496,13 +574,14 @@ func (q *Queries) GetTxOutputByTxID(ctx context.Context, txID string) (TxOutput,
 		&i.TxID,
 		&i.Index,
 		&i.Value,
+		&i.BID,
 		&i.PubKeyHash,
 	)
 	return i, err
 }
 
 const getTxOutputByTxIDAndIndex = `-- name: GetTxOutputByTxIDAndIndex :one
-select id, tx_id, index, value, pub_key_hash from tx_outputs where tx_id = $1 and index = $2 limit 1
+select id, tx_id, index, value, b_id, pub_key_hash from tx_outputs where tx_id = $1 and index = $2 limit 1
 `
 
 type GetTxOutputByTxIDAndIndexParams struct {
@@ -518,6 +597,7 @@ func (q *Queries) GetTxOutputByTxIDAndIndex(ctx context.Context, arg GetTxOutput
 		&i.TxID,
 		&i.Index,
 		&i.Value,
+		&i.BID,
 		&i.PubKeyHash,
 	)
 	return i, err

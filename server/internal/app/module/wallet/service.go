@@ -1,11 +1,12 @@
 package wallet
 
 import (
-	"ChainServer/internal/cache/redis"
+	redisdb "ChainServer/internal/cache/redis"
 	"ChainServer/internal/common/apperror"
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/env"
 	"ChainServer/internal/common/helpers"
+	"ChainServer/internal/common/types"
 	"ChainServer/internal/common/utils"
 	dbwallet "ChainServer/internal/db/wallet"
 	"context"
@@ -14,6 +15,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -68,7 +70,7 @@ func (s *WalletService) CreateWallet(dto *dto.WalletParsed) (*string, *apperror.
 		return nil, errInternalCommon
 	}
 
-	payload := JWTWalletAuthPayload{
+	payload := types.JWTWalletAuthPayload{
 		ID:      wallet.ID.String(),
 		Address: wallet.Address,
 		Pubkey:  wallet.PublicKey,
@@ -85,7 +87,7 @@ func (s *WalletService) CreateWallet(dto *dto.WalletParsed) (*string, *apperror.
 		return nil, errInternalCommon
 	}
 
-	err = redis.Set(
+	err = redisdb.Set(
 		ctx,
 		helpers.BlacklistSigKey(helpers.AuthKeyTypeSig, hex.EncodeToString(dto.Sig)),
 		token,
@@ -167,7 +169,7 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 		wallet = walletUpdated
 	}
 
-	payload := JWTWalletAuthPayload{
+	payload := types.JWTWalletAuthPayload{
 		ID:      wallet.ID.String(),
 		Address: wallet.Address,
 		Pubkey:  wallet.PublicKey,
@@ -184,7 +186,7 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 		return nil, errInternalCommon
 	}
 
-	err = redis.Set(
+	err = redisdb.Set(
 		ctx,
 		helpers.BlacklistSigKey(helpers.AuthKeyTypeSig, hex.EncodeToString(dto.Sig)),
 		token,
@@ -199,14 +201,14 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 	return &token, nil
 }
 
-func (s *WalletService) Disconnect(token string, payload utils.JWTPayload[JWTWalletAuthPayload]) {
+func (s *WalletService) Disconnect(token string, payload utils.JWTPayload[types.JWTWalletAuthPayload]) {
 	ttl := time.Until(payload.ExpiresAt.Time) + 2*time.Minute
 
 	if ttl <= 0 {
 		ttl = 2 * time.Minute
 	}
 
-	err := redis.Set(context.Background(),
+	err := redisdb.Set(context.Background(),
 		helpers.BlacklistSigKey(helpers.AuthKeyTypeJWT, token),
 		"blacklisted",
 		ttl,
@@ -224,7 +226,9 @@ func (s *WalletService) GetWallet(pubkey []byte) (*dbwallet.Wallet, *apperror.Ap
 	walletCache, err := s.cacheRepo.GetWalletById(ctx, key)
 
 	if err != nil {
-		log.Errorf("Failed to get wallet cache with pubKey %s: %v", key, err)
+		if err != redis.Nil {
+			log.Errorf("Failed to get wallet cache with pubKey %s: %v", key, err)
+		}
 	} else {
 		return walletCache, nil
 	}

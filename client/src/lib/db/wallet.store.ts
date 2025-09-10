@@ -8,8 +8,10 @@ export interface KeyPair {
   publicKey: string;
 }
 
-const version = 0x00;
-const checkSumLength = 4;
+const version = parseInt(process.env.NEXT_PUBLIC_CHAIN_VERSION || '0');
+const checkSumLength = parseInt(
+  process.env.NEXT_PUBLIC_CHAIN_CHECK_SUM_LENGTH || '0',
+);
 
 export const CreateWallet = (): KeyPair => {
   const ec = new EC('p256');
@@ -58,4 +60,21 @@ export const GetAddress = (publicKey: string): string => {
   const checksum = createCheckSum(versionedHash);
   const fullHash = Buffer.concat([versionedHash, checksum]);
   return bs58.encode(fullHash);
+};
+
+export const ValidateAddress = (address: string): boolean => {
+  if (address.length != 34) {
+    return false;
+  }
+
+  const fullHash = bs58.decode(address);
+
+  const checkSumFromHash = fullHash.slice(fullHash.length - checkSumLength);
+  const version = fullHash[0];
+  const pubkeyHash = fullHash.slice(1, fullHash.length - checkSumLength);
+  const checkSum = createCheckSum(
+    Buffer.concat([Buffer.from([version]), pubkeyHash]),
+  );
+
+  return checkSum.equals(Buffer.from(checkSumFromHash));
 };

@@ -30,20 +30,44 @@ func (r *dbChainRepository) CreateBlock(ctx context.Context, args dbchain.Create
 	return q.CreateBlock(ctx, args)
 }
 
-func (r *dbChainRepository) GetBlockByHeight(ctx context.Context, height int64) (dbchain.Block, error) {
-	return r.queries.GetBlockByHeight(ctx, height)
+func (r *dbChainRepository) GetBlockByHeight(ctx context.Context, height int64, tx *sql.Tx) (dbchain.Block, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetBlockByHeight(ctx, height)
 }
 
-func (r *dbChainRepository) GetLastBlock(ctx context.Context) (dbchain.Block, error) {
-	return r.queries.GetLastBlock(ctx)
+func (r *dbChainRepository) GetLastBlock(ctx context.Context, tx *sql.Tx) (dbchain.Block, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetLastBlock(ctx)
 }
 
-func (r *dbChainRepository) GetBlockByHash(ctx context.Context, hash string) (dbchain.Block, error) {
-	return r.queries.GetBlockByBID(ctx, hash)
+func (r *dbChainRepository) GetBlockByHash(ctx context.Context, hash string, tx *sql.Tx) (dbchain.Block, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetBlockByBID(ctx, hash)
 }
 
-func (r *dbChainRepository) GetListBlock(ctx context.Context, args dbchain.GetListBlocksParams) ([]dbchain.Block, error) {
-	return r.queries.GetListBlocks(ctx, args)
+func (r *dbChainRepository) GetListBlock(ctx context.Context, args dbchain.GetListBlocksParams, tx *sql.Tx) ([]dbchain.Block, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetListBlocks(ctx, args)
 }
 
 func (r *dbChainRepository) DeleteBlockByHash(ctx context.Context, hash string, tx *sql.Tx) error {
@@ -54,3 +78,15 @@ func (r *dbChainRepository) DeleteBlockByHash(ctx context.Context, hash string, 
 	}
 	return q.DeleteBlockByBID(ctx, hash)
 }
+
+func (r *dbChainRepository) ExistingBlock(ctx context.Context, hash string, tx *sql.Tx) (bool, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.IsExistingBlock(ctx, hash)
+}
+
+// func (r *dbChainRepository) FindUTXO()

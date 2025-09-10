@@ -1,7 +1,7 @@
 package redis
 
 import (
-	"ChainServer/internal/common/config"
+	"ChainServer/internal/common/types"
 	"ChainServer/internal/common/utils"
 	"context"
 	"errors"
@@ -16,11 +16,11 @@ import (
 var (
 	Client   *redis.Client
 	once     sync.Once
-	redisCfg config.RedisConfig
+	redisCfg types.RedisConfig
 	clientMu sync.RWMutex
 )
 
-func InitRedis(cfg config.RedisConfig) {
+func InitRedis(cfg types.RedisConfig) {
 	once.Do(func() {
 		opt, err := redis.ParseURL(cfg.URL)
 		if err != nil {

@@ -2,6 +2,7 @@ import { BaseResponse } from '@/shared/types/api';
 import { Wallet, WalletConnectPayload } from '../types/wallet';
 import { http } from '@/lib/axios/http';
 import { handleApiError } from '@/lib/axios/handleErrorApi';
+
 class WalletService {
   public async CreateWallet(payload: WalletConnectPayload) {
     try {

@@ -49,8 +49,8 @@ select * from transactions where b_id = $1;
 select * from transactions offset $1 limit $2;
 
 -- name: CreateTxInput :one
-insert into tx_inputs (tx_id, input_tx_id, out_index, sig, pub_key)
-values ($1, $2, $3, $4, $5) returning *;
+insert into tx_inputs (tx_id, input_tx_id, out_index, sig, b_id, pub_key)
+values ($1, $2, $3, $4, $5, $6) returning *;
 
 -- name: GetListTxInputByTxID :many
 select * from tx_inputs where tx_id = $1;
@@ -58,10 +58,15 @@ select * from tx_inputs where tx_id = $1;
 -- name: GetTxInputByTxID :one
 select * from tx_inputs where tx_id = $1 limit 1;
 
+-- name: FindTxInputByBlockID :many
+select * from tx_inputs where b_id = $1;
 
 -- name: CreateTxOutput :one
-insert into tx_outputs (tx_id, value, pub_key_hash, index)
-values ($1, $2, $3, $4) returning *;
+insert into tx_outputs (tx_id, value, pub_key_hash, b_id, index)
+values ($1, $2, $3, $4, $5) returning *;
+
+-- name: FindListTxOutputByBlockID :many
+select * from tx_outputs where b_id = $1;
 
 -- name: GetListTxOutputByTxId :many
 select * from tx_outputs where tx_id = $1;

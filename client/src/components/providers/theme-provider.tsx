@@ -8,13 +8,12 @@ export function ThemeProvider({
   ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
   React.useEffect(() => {
-    if (
-      !localStorage.getItem('theme') &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-    ) {
-      localStorage.setItem('theme', 'dark');
-    } else {
-      localStorage.setItem('theme', 'light');
+    if (!localStorage.getItem('theme')) {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        localStorage.setItem('theme', 'dark');
+      } else {
+        localStorage.setItem('theme', 'light');
+      }
     }
   }, []);
 

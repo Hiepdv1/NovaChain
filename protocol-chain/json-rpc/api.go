@@ -2,6 +2,7 @@ package jsonrpc
 
 import (
 	"core-blockchain/cmd/utils"
+	"core-blockchain/common/err"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -18,7 +19,9 @@ func NewAPI(cli *utils.CommandLine) *API {
 
 func (api *API) registerHandlers() {
 	handlers = map[string]HandleFunc{
+		"API.GetAllUTXOs":           api.GetAllUTXOs,
 		"API.SendTx":                api.HandleSendTx,
+		"API.GetBlock":              api.GetBlockByHash,
 		"API.GetBalance":            api.HandleGetBalance,
 		"API.CreateWallet":          api.HandleCreateWallet,
 		"API.GetBlockchain":         api.HandleGetBlockchain,
@@ -37,25 +40,19 @@ func (api *API) ProcessRequest(req JSONRPCRequest) JSONRPCResponse {
 	handler, ok := handlers[req.Method]
 
 	if !ok {
-		res.Error = &RPCError{
-			Code:    -32602,
-			Message: "Method not found",
-		}
+		res.Error = err.ErrNotFound("Method not found")
 	}
 
-	result, err := handler(req.Params)
+	result, e := handler(req.Params)
 
-	if err != nil {
-		res.Error = err
+	if e != nil {
+		res.Error = e
 	} else {
-		b, err := SafeMarshalJSON(result)
+		b, e := SafeMarshalJSON(result)
 
-		if err != nil {
-			log.Error(err)
-			res.Error = &RPCError{
-				Code:    -32602,
-				Message: "Encode Error",
-			}
+		if e != nil {
+			log.Error(e)
+			res.Error = err.ErrInternal("Encode Error")
 			return res
 		}
 

@@ -2,10 +2,12 @@ package blocksync
 
 import (
 	"ChainServer/internal/app/module/chain"
-	"ChainServer/internal/app/module/transaction"
+	"ChainServer/internal/common/helpers"
+	"ChainServer/internal/common/types"
 	"ChainServer/internal/common/utils"
 	"ChainServer/internal/db"
 	dbchain "ChainServer/internal/db/chain"
+	dbutxo "ChainServer/internal/db/utxo"
 	dbwallet "ChainServer/internal/db/wallet"
 	"context"
 	"database/sql"
@@ -13,20 +15,108 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func StringPtrToNullString(s *string) sql.NullString {
-	if s == nil || *s == "" {
-		return sql.NullString{Valid: false}
+func (j *jobBlockSync) handleCreateUtxo(block *chain.Block, sqlTx *sql.Tx) error {
+	ctx := context.Background()
+
+	for _, tx := range block.Transactions {
+
+		for _, in := range tx.Inputs {
+			params := dbutxo.DeleteUTXOParams{
+				TxID:        helpers.StringToNullString(in.ID),
+				OutputIndex: in.Out,
+			}
+
+			if err := j.dbUtxo.DeleteUTXO(ctx, params, sqlTx); err != nil {
+				return err
+			}
+
+		}
+
+		for idx, out := range tx.Outputs {
+			params := dbutxo.CreateUTXOParams{
+				TxID:        helpers.StringToNullString(tx.ID),
+				OutputIndex: int64(idx),
+				Value:       helpers.FormatDecimal(out.Value, 10),
+				PubKeyHash:  strings.Trim(out.PubKeyHash, ""),
+				BlockID:     block.Hash,
+			}
+
+			if utxo, err := j.dbUtxo.CreateUTXO(ctx, params, sqlTx); err != nil {
+				return err
+			} else {
+				log.Infof("New utxo with pubkeyhash %s: %v", out.PubKeyHash, utxo)
+			}
+		}
 	}
-	return sql.NullString{String: *s, Valid: true}
+
+	return nil
 }
 
-func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash string, tx *sql.Tx) error {
+func (j *jobBlockSync) handleReorganizationUtxo(block *dbchain.Block, sqlTx *sql.Tx) error {
+	ctx := context.Background()
+
+	txOutputs, err := j.dbTrans.FindListTxOutputByBlockHash(ctx, block.BID, sqlTx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			txOutputs = make([]dbchain.TxOutput, 0)
+		} else {
+			return err
+		}
+	}
+
+	txInputs, err := j.dbTrans.FindListTxInputByBlockHash(ctx, block.BID, sqlTx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			txInputs = make([]dbchain.TxInput, 0)
+		} else {
+			return err
+		}
+	}
+
+	for range txOutputs {
+		if err := j.dbUtxo.DeleteUTXOByBlockID(ctx, block.BID, sqlTx); err != nil {
+			return err
+		}
+	}
+
+	for _, in := range txInputs {
+		getOutparams := dbchain.GetTxOutputByTxIDAndIndexParams{
+			TxID:  in.InputTxID.String,
+			Index: in.OutIndex,
+		}
+		output, err := j.dbTrans.GetTxOutputByTxIDAndIndex(ctx, getOutparams, sqlTx)
+		if err != nil {
+			return err
+		}
+
+		createUtxoParams := dbutxo.CreateUTXOParams{
+			TxID:        in.InputTxID,
+			OutputIndex: in.OutIndex,
+			Value:       output.Value,
+			PubKeyHash:  output.PubKeyHash,
+			BlockID:     block.BID,
+		}
+
+		utxo, err := j.dbUtxo.CreateUTXO(ctx, createUtxoParams, sqlTx)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Reoraganization - utxo: %v", utxo)
+	}
+
+	return nil
+}
+
+func (j *jobBlockSync) handleCreateInput(ins []types.TxInput, b_id, txHash string, tx *sql.Tx) error {
 	ctx := context.Background()
 	for _, in := range ins {
 		pubkey, err := hex.DecodeString(in.PubKey)
@@ -37,10 +127,11 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 
 		args := dbchain.CreateTxInputParams{
 			TxID:      txHash,
-			InputTxID: in.ID,
+			InputTxID: helpers.StringToNullString(in.ID),
 			OutIndex:  in.Out,
-			Sig:       in.Signature,
-			PubKey:    in.PubKey,
+			Sig:       helpers.StringToNullString(in.Signature),
+			BID:       b_id,
+			PubKey:    helpers.StringToNullString(in.PubKey),
 		}
 		txIn, err := j.dbTrans.CreateTxInput(ctx, args, tx)
 		if err != nil {
@@ -50,8 +141,7 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 		log.Infof("Sync New TxInput: %v", txIn)
 
 		if in.PubKey != "" {
-
-			wallet, err := j.dbWallet.GetWalletByPubkey(ctx, []byte(in.PubKey), tx)
+			wallet, err := j.dbWallet.GetWalletByPubkey(ctx, pubkey, tx)
 			if err != nil && errors.Is(err, sql.ErrNoRows) {
 				log.Info("No wallet, Create Wallet in tx_input")
 				newWallet, err := j.dbWallet.CreateWallet(
@@ -83,7 +173,7 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 			txoutput, err := j.dbTrans.GetTxOutputByTxIDAndIndex(ctx, dbchain.GetTxOutputByTxIDAndIndexParams{
 				TxID:  in.ID,
 				Index: in.Out,
-			})
+			}, tx)
 
 			if err != nil && errors.Is(err, sql.ErrNoRows) {
 				// block genesis or block reward
@@ -115,7 +205,7 @@ func (j *jobBlockSync) handleCreateInput(ins []transaction.TxInput, txHash strin
 	return nil
 }
 
-func (j *jobBlockSync) handleCreateOutput(outs []transaction.TxOutput, txHash string, tx *sql.Tx) error {
+func (j *jobBlockSync) handleCreateOutput(outs []types.TxOutput, b_id, txHash string, tx *sql.Tx) error {
 	ctx := context.Background()
 	for Index, out := range outs {
 		wallet, err := j.dbWallet.GetWalletByPubKeyHash(ctx, out.PubKeyHash, tx)
@@ -123,6 +213,7 @@ func (j *jobBlockSync) handleCreateOutput(outs []transaction.TxOutput, txHash st
 			log.Info("No wallet, Create Wallet in tx_outputs")
 			newWallet, err := j.dbWallet.CreateWallet(
 				ctx,
+				// Set null
 				dbwallet.CreateWalletParams{
 					Address:       "-",
 					PublicKey:     "-",
@@ -152,6 +243,7 @@ func (j *jobBlockSync) handleCreateOutput(outs []transaction.TxOutput, txHash st
 			Value:      fmt.Sprintf("%.8f", out.Value),
 			PubKeyHash: out.PubKeyHash,
 			Index:      int64(Index),
+			BID:        b_id,
 		}
 
 		txout, err := j.dbTrans.CreateTxOutput(ctx, args, tx)
@@ -179,7 +271,7 @@ func (j *jobBlockSync) handleCreateOutput(outs []transaction.TxOutput, txHash st
 	return nil
 }
 
-func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*transaction.Transaction, hashBlock string, sqlTx *sql.Tx) error {
+func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*types.Transaction, hashBlock string, sqlTx *sql.Tx) error {
 	for _, tx := range txs {
 		args := dbchain.CreateTransactionParams{
 			TxID: tx.ID,
@@ -192,13 +284,13 @@ func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*tran
 		}
 		log.Infof("Sync New Transaction: %v", transaction)
 
-		err = j.handleCreateInput(tx.Inputs, tx.ID, sqlTx)
+		err = j.handleCreateInput(tx.Inputs, hashBlock, tx.ID, sqlTx)
 
 		if err != nil {
 			return err
 		}
 
-		err = j.handleCreateOutput(tx.Outputs, tx.ID, sqlTx)
+		err = j.handleCreateOutput(tx.Outputs, hashBlock, tx.ID, sqlTx)
 		if err != nil {
 			return err
 		}
@@ -212,7 +304,7 @@ func (j *jobBlockSync) handleCreateBlock(block *chain.Block, tx *sql.Tx) error {
 
 	args := dbchain.CreateBlockParams{
 		BID:        block.Hash,
-		PrevHash:   StringPtrToNullString(&block.PrevHash),
+		PrevHash:   helpers.StringPtrToNullString(&block.PrevHash),
 		Nonce:      block.Nonce,
 		Height:     block.Height,
 		MerkleRoot: block.MerkleRoot,
@@ -237,9 +329,9 @@ func (j *jobBlockSync) isGenesisBlock(block *chain.Block) bool {
 	return block.PrevHash == ""
 }
 
-func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) error {
+func (j *jobBlockSync) handleReorganization(block *chain.Block, sqlTx *sql.Tx) error {
 	ctx := context.Background()
-	lastBlock, err := j.dbChain.GetLastBlock(ctx)
+	lastBlock, err := j.dbChain.GetLastBlock(ctx, sqlTx)
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return err
 	} else if err != nil {
@@ -253,14 +345,14 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 	for {
 		oldChain = append(oldChain, currentBlock)
 
-		if currentBlock.BID == block.BID || !currentBlock.PrevHash.Valid {
-			break
-		}
-
-		nextBlock, err := j.dbChain.GetBlockByHash(ctx, currentBlock.PrevHash.String)
+		nextBlock, err := j.dbChain.GetBlockByHash(ctx, currentBlock.PrevHash.String, sqlTx)
 
 		if err != nil {
 			return err
+		}
+
+		if nextBlock.BID == block.PrevHash || !currentBlock.PrevHash.Valid {
+			break
 		}
 
 		currentBlock = nextBlock
@@ -269,7 +361,11 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 
 	for _, block := range oldChain {
 
-		transactions, err := j.dbTrans.GetListTransactionByBlockHash(ctx, block.BID)
+		if err := j.handleReorganizationUtxo(&block, sqlTx); err != nil {
+			return err
+		}
+
+		transactions, err := j.dbTrans.GetListTransactionByBlockHash(ctx, block.BID, sqlTx)
 		if err != nil {
 			return err
 		}
@@ -282,8 +378,8 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 			}
 
 			for _, input := range txInputs {
-				if input.PubKey != "" {
-					pubkey, err := hex.DecodeString(input.PubKey)
+				if input.PubKey.Valid {
+					pubkey, err := hex.DecodeString(input.PubKey.String)
 					if err != nil {
 						return fmt.Errorf("failed to decode pubkey: %v", err)
 					}
@@ -296,9 +392,9 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 					}
 
 					prevOutput, err := j.dbTrans.GetTxOutputByTxIDAndIndex(ctx, dbchain.GetTxOutputByTxIDAndIndexParams{
-						TxID:  input.InputTxID,
+						TxID:  input.InputTxID.String,
 						Index: input.OutIndex,
-					})
+					}, sqlTx)
 
 					if err != nil {
 						return err
@@ -351,13 +447,62 @@ func (j *jobBlockSync) handleReorganization(block dbchain.Block, sqlTx *sql.Tx) 
 	return nil
 }
 
+func (j *jobBlockSync) handleSwitchChain(block *chain.Block, tx *sql.Tx) error {
+	newChain := make([]*chain.Block, 0)
+	newChain = append(newChain, block)
+	currentHash := block.PrevHash
+
+	for {
+		block, err := j.dbChainRpc.GetBlockByHash(currentHash)
+		if err != nil {
+			return err
+		}
+
+		exists, err := j.dbChain.ExistingBlock(context.Background(), block.Hash, nil)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			break
+		}
+
+		newChain = append(newChain, block)
+		currentHash = block.PrevHash
+
+	}
+
+	slices.Reverse(newChain)
+
+	err := j.handleReorganization(newChain[0], tx)
+
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Switch New Chain with hash: %s and work: %s", block.Hash, block.NChainWork)
+
+	for _, block := range newChain {
+		err := j.handleCreateBlock(block, tx)
+		if err != nil {
+			return err
+		}
+		err = j.handleCreateUtxo(block, tx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (j *jobBlockSync) handleSyncBlock(blocks []*chain.Block, tx *sql.Tx) error {
 	ctx := context.Background()
 
 	for i := len(blocks) - 1; i >= 0; i-- {
 		block := blocks[i]
 
-		lastBlock, err := j.dbChain.GetLastBlock(ctx)
+		lastBlock, err := j.dbChain.GetLastBlock(ctx, tx)
 		if err != nil && errors.Is(err, sql.ErrNoRows) {
 			lastBlock = dbchain.Block{}
 		} else if err != nil {
@@ -379,26 +524,28 @@ func (j *jobBlockSync) handleSyncBlock(blocks []*chain.Block, tx *sql.Tx) error 
 			if err != nil {
 				return err
 			}
-			continue
-		}
 
-		prevBlock, err := j.dbChain.GetBlockByHash(ctx, block.PrevHash)
-		if err != nil && errors.Is(err, sql.ErrNoRows) {
-			log.Warnf("Block with hash %s not found, skipping", block.PrevHash)
+			err = j.handleCreateUtxo(block, tx)
+
+			if err != nil {
+				return err
+			}
 			continue
-		} else if err != nil {
-			return err
 		}
 
 		lastBlockNChainWork := big.NewInt(0)
 		lastBlockNChainWork.SetString(lastBlock.NchainWork, 10)
 
 		if block.NChainWork.Cmp(lastBlockNChainWork) > 0 {
-			if prevBlock.Height <= lastBlock.Height && prevBlock.BID != lastBlock.BID {
-				err := j.handleReorganization(prevBlock, tx)
-				if err != nil {
-					return err
+			_, err = j.dbChain.GetBlockByHash(ctx, block.PrevHash, tx)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					if err := j.handleSwitchChain(block, tx); err != nil {
+						return err
+					}
+					continue
 				}
+				return err
 			}
 
 			err := j.handleCreateBlock(block, tx)
@@ -407,6 +554,12 @@ func (j *jobBlockSync) handleSyncBlock(blocks []*chain.Block, tx *sql.Tx) error 
 			}
 
 			err = j.handleCreateTransactions(ctx, block.Transactions, block.Hash, tx)
+
+			if err != nil {
+				return err
+			}
+
+			err = j.handleCreateUtxo(block, tx)
 
 			if err != nil {
 				return err
@@ -427,7 +580,7 @@ func (j *jobBlockSync) StartBlockSync(interval time.Duration) {
 
 	for range ticker.C {
 
-		lastBlock, err := j.dbChain.GetLastBlock(ctx)
+		lastBlock, err := j.dbChain.GetLastBlock(ctx, nil)
 		if err != nil && errors.Is(err, sql.ErrNoRows) {
 			lastBlock = dbchain.Block{
 				Height: 1,

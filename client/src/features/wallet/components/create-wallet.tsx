@@ -38,11 +38,13 @@ const CreateWalletForm = ({ showModalByName, onStepUpdate }: CreateWallet) => {
     isShowCreatePassWord: true,
     isShowGenerateWallet: false,
   });
+
   const [keyPair, setKeyPair] = useState<Wallet>({
     address: '',
     privKey: '',
     pubKey: '',
   });
+
   const router = useRouter();
   const { refetch } = useWalletContext();
   const walletConnect = useWalletConnect();
@@ -149,14 +151,20 @@ const CreateWalletForm = ({ showModalByName, onStepUpdate }: CreateWallet) => {
   }, []);
 
   const onBackToHome = useCallback(async () => {
+    if (!refetch) return;
     await refetch();
+    onStepUpdate(1, false);
     router.push('/');
-  }, [router, refetch]);
+    router.refresh();
+  }, [router, refetch, onStepUpdate]);
 
   const onAccessWallet = useCallback(async () => {
+    if (!refetch) return;
     await refetch();
+    onStepUpdate(1, false);
     router.push('/wallet/me');
-  }, [router, refetch]);
+    router.refresh();
+  }, [router, refetch, onStepUpdate]);
 
   return (
     <Fragment>

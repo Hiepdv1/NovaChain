@@ -2,10 +2,10 @@ package bootstrap
 
 import (
 	"ChainServer/internal/cache/redis"
-	"ChainServer/internal/common/config"
 	"ChainServer/internal/common/env"
 	"ChainServer/internal/common/gobtypes"
 	"ChainServer/internal/common/logger"
+	"ChainServer/internal/common/types"
 	"time"
 )
 
@@ -14,11 +14,11 @@ func Init() {
 
 	logger.InitLogger(env.Cfg.AppEnv)
 
-	redis.InitRedis(config.RedisConfig{
+	redis.InitRedis(types.RedisConfig{
 		URL:          "redis://localhost:6379",
 		MaxRetries:   10,
 		RetryBackoff: 3 * time.Second,
-		Namespaces: []config.RedisNamespaceConfig{
+		Namespaces: []types.RedisNamespaceConfig{
 			{Name: string(redis.NamespaceBlacklist), TTL: time.Hour + 2*time.Minute},
 			{Name: string(redis.NamespaceSession), TTL: time.Hour + 2*time.Minute},
 			{Name: string(redis.NamespaceCache), TTL: 24 * time.Hour},

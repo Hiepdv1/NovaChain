@@ -27,14 +27,14 @@ CREATE INDEX idx_transactions_txid ON transactions(tx_id);
 CREATE TABLE IF NOT EXISTS tx_inputs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tx_id CHAR(64) NOT NULL REFERENCES transactions(tx_id) ON DELETE CASCADE,
-    input_tx_id CHAR(64) NOT NULL,
-    out_index BIGINT NOT NULL CHECK (out_index >= -1),
-    sig TEXT NOT NULL,
-    pub_key TEXT NOT NULL,
-
-    CONSTRAINT uniq_input_output UNIQUE (input_tx_id, out_index)
+    input_tx_id CHAR(64) REFERENCES transactions(tx_id) ON DELETE CASCADE,
+    out_index BIGINT CHECK (out_index >= -1) NOT NULL,
+    sig TEXT,
+    b_id CHAR(64) NOT NULL REFERENCES blocks(b_id) ON DELETE CASCADE,
+    pub_key TEXT
 );
 
+CREATE INDEX idx_txinputs_block_id ON tx_inputs(b_id);
 CREATE INDEX idx_txinputs_txid ON tx_inputs(tx_id);
 CREATE UNIQUE INDEX uniq_input_ref ON tx_inputs(input_tx_id, out_index);
 
@@ -43,8 +43,12 @@ CREATE TABLE IF NOT EXISTS tx_outputs (
     tx_id CHAR(64) NOT NULL REFERENCES transactions(tx_id) ON DELETE CASCADE,
     index BIGINT NOT NULL CHECK (index >= -1),
     value NUMERIC(20, 8) NOT NULL CHECK (value >= 0),
+    b_id CHAR(64) NOT NULL REFERENCES blocks(b_id) ON DELETE CASCADE,
     pub_key_hash CHAR(64) NOT NULL
+
 );
 
+CREATE INDEX idx_txoutputs_block_id ON tx_outputs(b_id);
 CREATE INDEX idx_txoutputs_pubkeyhash ON tx_outputs(pub_key_hash);
 CREATE INDEX idx_txoutputs_txid_index ON tx_outputs(tx_id, index);
+

@@ -18,10 +18,10 @@ func NewTransactionHandler(service *TransactionService) *TransactionHandler {
 	}
 }
 
-func (s *TransactionHandler) GetListTransaction(c *fiber.Ctx) error {
+func (h *TransactionHandler) GetListTransaction(c *fiber.Ctx) error {
 	queries := c.Locals("query").(dto.PaginationQuery)
 
-	txs, pagination, appErr := s.service.GetListTransaction(queries)
+	txs, pagination, appErr := h.service.GetListTransaction(queries)
 
 	if appErr != nil {
 		return helpers.HandleAppError(c, appErr)
@@ -34,4 +34,32 @@ func (s *TransactionHandler) GetListTransaction(c *fiber.Ctx) error {
 		"Get list transactions sucessfully",
 		fiber.StatusOK,
 	)
+}
+
+func (h *TransactionHandler) CreateNewTransaction(c *fiber.Ctx) error {
+	dto, apperr := helpers.GetLocalBody[*NewTransactionParsed](c)
+
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	walletPayload, apperr := helpers.GetLocalWallet(c)
+
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	tx, apperr := h.service.CreateNewTransaction(walletPayload, *dto)
+
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	return response.Success(
+		c,
+		tx,
+		"Create New Transaction Successfully",
+		fiber.StatusCreated,
+	)
+
 }

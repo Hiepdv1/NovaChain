@@ -3,16 +3,21 @@
 import { useModalStore } from '@/stores/modal-store';
 import { Fragment } from 'react';
 import AuthModal from '../modals/auth-modal';
+import VerifyTransaction from '../modals/tx-verification';
+import TransactionDetailModal from '../modals/transaction-detail-modal';
 
-const ModalProvider = ({ children }: { children: React.ReactNode }) => {
+const ModalProvider = () => {
   const { modal, actions } = useModalStore();
-
-  if (!modal.type) return children;
 
   return (
     <Fragment>
       {modal.type === 'reauth' && <AuthModal {...modal.props} {...actions} />}
-      {children}
+      {modal.type === 'verifyTx' && (
+        <VerifyTransaction {...modal.props} {...actions} />
+      )}
+      {modal.type === 'previewTx' && (
+        <TransactionDetailModal {...modal.props} {...actions} />
+      )}
     </Fragment>
   );
 };

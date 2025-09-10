@@ -40,7 +40,7 @@ func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.Block, *res
 	blocks, err := s.dbRepo.GetListBlock(ctx, dbchain.GetListBlocksParams{
 		Offset: offset,
 		Limit:  limit,
-	})
+	}, nil)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -49,7 +49,7 @@ func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.Block, *res
 		return nil, nil, apperror.Internal("Failted to get blocks", err)
 	}
 
-	lastestBlock, err := s.dbRepo.GetLastBlock(ctx)
+	lastestBlock, err := s.dbRepo.GetLastBlock(ctx, nil)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

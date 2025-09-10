@@ -2,7 +2,7 @@ package middlewares
 
 import (
 	"ChainServer/internal/cache/redis"
-	"ChainServer/internal/common/config"
+	"ChainServer/internal/common/constants"
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/env"
 	"ChainServer/internal/common/helpers"
@@ -80,7 +80,7 @@ func VerifyWalletSignature(c *fiber.Ctx) error {
 }
 
 func JWTAuthMiddleware[T any](c *fiber.Ctx) error {
-	token := c.Cookies(config.CookieAccessToken)
+	token := c.Cookies(constants.CookieAccessToken)
 	if token == "" {
 		return response.Error(
 			c,
@@ -133,7 +133,7 @@ func JWTAuthMiddleware[T any](c *fiber.Ctx) error {
 		)
 	}
 
-	c.Locals("wallet", payload)
+	helpers.SetLocalWallet(c, payload)
 
 	return c.Next()
 }

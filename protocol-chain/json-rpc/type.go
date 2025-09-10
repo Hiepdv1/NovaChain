@@ -1,11 +1,9 @@
 package jsonrpc
 
-import "encoding/json"
-
-type RPCError struct {
-	Code    int64  `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-}
+import (
+	"core-blockchain/common/err"
+	"encoding/json"
+)
 
 type WalletAPIArgs struct {
 	Address string `json:"address"`
@@ -33,6 +31,10 @@ type SendTxAPIArgs struct {
 	Mine     bool    `json:"mine"`
 }
 
+type GETAPIBlockByHash struct {
+	Hash []byte `json:"hash"`
+}
+
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
@@ -43,6 +45,6 @@ type JSONRPCRequest struct {
 type JSONRPCResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
 	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *RPCError       `json:"error,omitempty"`
+	Error   *err.RPCError   `json:"error,omitempty"`
 	ID      any             `json:"id"`
 }

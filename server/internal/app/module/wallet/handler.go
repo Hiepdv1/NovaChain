@@ -1,10 +1,11 @@
 package wallet
 
 import (
-	"ChainServer/internal/common/config"
+	"ChainServer/internal/common/constants"
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/env"
 	"ChainServer/internal/common/response"
+	"ChainServer/internal/common/types"
 	"ChainServer/internal/common/utils"
 	"encoding/hex"
 
@@ -27,11 +28,11 @@ func (h *WalletHandler) CreateWallet(c *fiber.Ctx) error {
 	token, apperr := h.service.CreateWallet(dto)
 
 	if apperr != nil {
-		return apperr.Reponse(c)
+		return apperr.Response(c)
 	}
 
 	c.Cookie(&fiber.Cookie{
-		Name:     config.CookieAccessToken,
+		Name:     constants.CookieAccessToken,
 		Value:    *token,
 		Path:     "/",
 		Domain:   env.Cfg.Domain_Client,
@@ -56,11 +57,11 @@ func (h *WalletHandler) ImportWallet(c *fiber.Ctx) error {
 	token, apperr := h.service.ImportWallet(dto)
 
 	if apperr != nil {
-		return apperr.Reponse(c)
+		return apperr.Response(c)
 	}
 
 	c.Cookie(&fiber.Cookie{
-		Name:     config.CookieAccessToken,
+		Name:     constants.CookieAccessToken,
 		Value:    *token,
 		Path:     "/",
 		Domain:   env.Cfg.Domain_Client,
@@ -80,8 +81,8 @@ func (h *WalletHandler) ImportWallet(c *fiber.Ctx) error {
 }
 
 func (h *WalletHandler) Disconnect(c *fiber.Ctx) error {
-	payload, ok := c.Locals("wallet").(*utils.JWTPayload[JWTWalletAuthPayload])
-	token := c.Cookies(config.CookieAccessToken)
+	payload, ok := c.Locals("wallet").(*utils.JWTPayload[types.JWTWalletAuthPayload])
+	token := c.Cookies(constants.CookieAccessToken)
 
 	if !ok || token == "" {
 		return response.Error(
@@ -95,7 +96,7 @@ func (h *WalletHandler) Disconnect(c *fiber.Ctx) error {
 
 	h.service.Disconnect(token, *payload)
 
-	c.ClearCookie(config.CookieAccessToken, "/", env.Cfg.Domain_Client)
+	c.ClearCookie(constants.CookieAccessToken, "/", env.Cfg.Domain_Client)
 
 	return response.Success(
 		c,
@@ -107,7 +108,7 @@ func (h *WalletHandler) Disconnect(c *fiber.Ctx) error {
 }
 
 func (h *WalletHandler) GetMe(c *fiber.Ctx) error {
-	payload := c.Locals("wallet").(*utils.JWTPayload[JWTWalletAuthPayload])
+	payload := c.Locals("wallet").(*utils.JWTPayload[types.JWTWalletAuthPayload])
 
 	pubkey, err := hex.DecodeString(payload.Data.Pubkey)
 
@@ -124,7 +125,7 @@ func (h *WalletHandler) GetMe(c *fiber.Ctx) error {
 	wallet, apperr := h.service.GetWallet(pubkey)
 
 	if apperr != nil {
-		return apperr.Reponse(c)
+		return apperr.Response(c)
 	}
 
 	return response.Success(

@@ -87,12 +87,12 @@ Subcommands:
 	}
 
 	var listWalletAddressCmd = &cobra.Command{
-		Use:   "listAddress",
+		Use:   "list",
 		Short: "List all wallet addresses",
 		Long:  `List all wallet addresses stored locally.`,
 		Args:  cobra.MinimumNArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			cli.ListAddresses()
+			cli.ListWallet()
 		},
 	}
 
@@ -245,7 +245,7 @@ Example:
 `,
 		Args: cobra.MinimumNArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			cli.Send(sendFrom, sendTo, amount, fee, mineNow)
+			// cli.Send(sendFrom, sendTo, amount, fee, mineNow)
 		},
 	}
 

@@ -18,9 +18,3 @@ type BalanceResult struct {
 	Balance *Balance
 	Err     *apperror.AppError
 }
-
-type JWTWalletAuthPayload struct {
-	ID      string `json:"id"`
-	Address string `json:"address"`
-	Pubkey  string `json:"pubkey"`
-}

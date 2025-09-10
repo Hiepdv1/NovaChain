@@ -7,7 +7,7 @@ export interface InputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>,
     VariantProps<typeof inputVariants> {}
 
-const inputVariants = cva('w-full text-white', {
+const inputVariants = cva('w-full disabled:cursor-not-allowed text-white', {
   variants: {
     variant: {
       levitating:

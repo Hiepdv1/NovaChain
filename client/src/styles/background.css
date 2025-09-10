@@ -1,5 +1,14 @@
 @theme {
   --color-form-wallet: rgba(255, 255, 255, 0.25);
+  --color-primary-dark: rgba(17, 24, 39, 0.8);
+  --color-primary-900: #6b4190;
+  --color-primary-700: #4f60c4;
+  --color-primary-800: #764ba2;
+  --color-primary-600: #5a6fd8;
+  --color-primary-500: #667eea;
+  --color-primary-100: #e0e9ff;
+  --color-primary-50: #f0f4ff;
+  --color-secondary-dark: rgba(75, 85, 99, 0.3);
 }
 
 @layer components {
@@ -21,6 +30,10 @@
       rgba(255, 255, 255, 0.05) 0%,
       rgba(255, 255, 255, 0.02) 100%
     );
+  }
+
+  .bg-image-none {
+    background-image: none;
   }
 
   .bg-gradient-primary {

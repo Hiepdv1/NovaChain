@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"log"
-
 	"github.com/mr-tron/base58"
 )
 
@@ -12,12 +10,12 @@ func Base58Encode(input []byte) []byte {
 	return []byte(enCode)
 }
 
-func Base58Decode(input string) []byte {
+func Base58Decode(input string) ([]byte, error) {
 	decode, err := base58.Decode(input)
 
 	if err != nil {
-		log.Panic(err)
+		return nil, err
 	}
 
-	return decode
+	return decode, nil
 }

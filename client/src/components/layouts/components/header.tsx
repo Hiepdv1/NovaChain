@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useDisconnectWalletMutation } from '@/features/wallet/hook/useWalletQuery';
 import { DelWalletPool, GetWalletPool } from '@/lib/db/wallet.index';
+import { formatAddress } from '@/lib/utils';
 import { StoredWallet } from '@/shared/types/wallet';
 import {
   Activity,
@@ -23,6 +24,7 @@ import {
   Copy,
   ExternalLink,
   LogOut,
+  Send,
   Settings,
   Wallet,
 } from 'lucide-react';
@@ -30,15 +32,45 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+interface MenuItem {
+  id: number;
+  title: string;
+  icon: React.ElementType;
+  path: string;
+}
+const MenuList: MenuItem[] = [
+  {
+    id: 1,
+    title: 'View on Explorer',
+    icon: ExternalLink,
+    path: '/',
+  },
+  {
+    id: 2,
+    title: 'Transaction History',
+    icon: Activity,
+    path: '/txs',
+  },
+  {
+    id: 3,
+    title: 'Send Transaction',
+    icon: Send,
+    path: '/txs/send',
+  },
+  {
+    id: 4,
+    title: 'Wallet Settings',
+    icon: Settings,
+    path: '/settings',
+  },
+];
+
 const Header = () => {
-  const { data, refetch } = useWalletContext();
+  const { wallet: walletQuery, refetch } = useWalletContext();
   const [wallet, setWallet] = useState<StoredWallet | null>(null);
   const [copied, setCopied] = useState(false);
   const { mutate: disconnectWallet } = useDisconnectWalletMutation();
   const router = useRouter();
-
-  const formatAddress = (addr: string) =>
-    `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   useEffect(() => {
     GetWalletPool().then((ws) => {
@@ -49,7 +81,7 @@ const Header = () => {
   }, []);
 
   const onCopy = async () => {
-    if (!wallet) return;
+    if (!walletQuery || !walletQuery.data || !wallet) return;
 
     setCopied(true);
 
@@ -65,11 +97,23 @@ const Header = () => {
     disconnectWallet(null, {
       onSuccess: async () => {
         await DelWalletPool();
-        await refetch();
+        await refetch?.();
         setWallet(null);
       },
     });
   };
+
+  const onConnect = () => {
+    router.push('/wallet/connect');
+    router.refresh();
+  };
+
+  const onNavLink = async (item: MenuItem) => {
+    await refetch?.();
+    router.push(item.path);
+    router.refresh();
+  };
+
   return (
     <header className="shadow-xl dark:shadow-lg dark:ring-2 dark:ring-white/10 backdrop-blur-lg bg-gradient-glass dark:bg-gradient-glass-dark border-b border-white/20 dark:border-gray-700/50 sticky top-0 z-50">
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -104,7 +148,7 @@ const Header = () => {
               <Input
                 variant="levitating"
                 inputSize="sm"
-                className="dark:text-white pl-10 pr-4 dark:placeholder:text-white placeholder:text-black border-slate-400 font-normal py-3 rounded-xl !bg-gradient-glass text-xs text-black"
+                className="dark:text-white pl-10 pr-4 dark:!bg-transparent dark:placeholder:text-white placeholder:text-black border-slate-400 font-normal py-3 rounded-xl !bg-gradient-glass text-xs text-black"
                 id="search"
                 name="s"
                 placeholder="Search by address, tx hash, or block ...."
@@ -168,10 +212,10 @@ const Header = () => {
             <ModeToggle className="text-xs cursor-pointer rounded-full w-9 h-9" />
 
             {wallet ? (
-              <div>
+              <div className="outline-none select-none">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="cursor-pointer flex items-center space-x-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 border border-blue-200/50 dark:border-blue-700/50 rounded-xl transition-all duration-200 group">
+                    <button className="outline-none cursor-pointer flex items-center space-x-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 border border-blue-200/50 dark:border-blue-700/50 rounded-xl transition-all duration-200 group">
                       <div className="relative">
                         <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                           <Wallet className="w-4 h-4 text-white" />
@@ -185,8 +229,10 @@ const Header = () => {
                         </div>
                         <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
                           <span>
-                            {(data?.Balance &&
-                              parseFloat(data.Balance).toString()) ||
+                            {(walletQuery?.data?.Balance &&
+                              parseFloat(
+                                walletQuery.data.Balance,
+                              ).toString()) ||
                               'N/A'}{' '}
                             CCC
                           </span>
@@ -227,8 +273,10 @@ const Header = () => {
                             Balance
                           </div>
                           <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                            {(data?.Balance &&
-                              parseFloat(data.Balance).toString()) ||
+                            {(walletQuery?.data?.Balance &&
+                              parseFloat(
+                                walletQuery.data.Balance,
+                              ).toString()) ||
                               'N/A'}
                           </div>
                         </div>
@@ -259,29 +307,22 @@ const Header = () => {
 
                     <DropdownMenuSeparator className="bg-gray-200 dark:bg-gray-800" />
 
-                    <DropdownMenuItem
-                      // onClick={viewOnExplorer}
-                      className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
-                      <span className="text-xs text-gray-700 dark:text-gray-300">
-                        View on Explorer
-                      </span>
-                    </DropdownMenuItem>
+                    {MenuList.map((navItem) => {
+                      const Icon = navItem.icon;
 
-                    <DropdownMenuItem className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
-                      <Activity className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
-                      <span className="text-xs text-gray-700 dark:text-gray-300">
-                        Transaction History
-                      </span>
-                    </DropdownMenuItem>
-
-                    <DropdownMenuItem className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
-                      <Settings className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
-                      <span className="text-xs text-gray-700 dark:text-gray-300">
-                        Wallet Settings
-                      </span>
-                    </DropdownMenuItem>
+                      return (
+                        <DropdownMenuItem
+                          onClick={() => onNavLink(navItem)}
+                          key={navItem.id}
+                          className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                        >
+                          <Icon className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
+                          <span className="text-xs text-gray-700 dark:text-gray-300">
+                            {navItem.title}
+                          </span>
+                        </DropdownMenuItem>
+                      );
+                    })}
 
                     <DropdownMenuSeparator className="bg-gray-200 dark:bg-gray-800" />
 
@@ -300,7 +341,7 @@ const Header = () => {
                 variant="secondary"
                 size="sm"
                 className="rounded-lg flex items-center"
-                onClick={() => router.push('/wallet/connect')}
+                onClick={onConnect}
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 <span className="text-sm">Connect</span>

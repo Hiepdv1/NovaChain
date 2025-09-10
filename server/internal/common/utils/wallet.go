@@ -50,7 +50,11 @@ func ValidateAddress(address string) bool {
 		return false
 	}
 
-	fullHash := Base58Decode(address)
+	fullHash, err := Base58Decode(address)
+
+	if err != nil {
+		return false
+	}
 
 	checkSumFromHash := fullHash[len(fullHash)-checkSumlength:]
 	version := fullHash[0]

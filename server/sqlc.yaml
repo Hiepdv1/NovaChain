@@ -7,7 +7,15 @@ sql:
       go:
         package: "dbchain"
         out: "internal/db/chain"
-    
+
+  - engine: "postgresql"
+    queries: "db/utxo/query.sql"
+    schema: "db/utxo/schema.sql"
+    gen:
+      go:
+        package: "dbutxo"
+        out: "internal/db/utxo"
+      
   - engine: "postgresql"
     queries: "db/wallet/query.sql"
     schema: "db/wallet/schema.sql"

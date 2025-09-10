@@ -33,8 +33,8 @@ func (w *walletCacheRepository) NewKey(parts ...string) *cacheRedis.CacheKey {
 	}
 }
 
-func (w *walletCacheRepository) GetWalletById(ctx context.Context, walletId string) (*dbwallet.Wallet, error) {
-	key := w.NewKey(walletId, "auth")
+func (w *walletCacheRepository) GetWalletById(ctx context.Context, pubkeyHex string) (*dbwallet.Wallet, error) {
+	key := w.NewKey(pubkeyHex, "auth")
 
 	wallet, err := cacheRedis.GetTyped[dbwallet.Wallet](ctx, *key)
 
@@ -46,7 +46,7 @@ func (w *walletCacheRepository) GetWalletById(ctx context.Context, walletId stri
 }
 
 func (w *walletCacheRepository) AddWallet(ctx context.Context, wallet dbwallet.Wallet, ttl ...time.Duration) error {
-	key := w.NewKey(wallet.ID.String(), "auth")
+	key := w.NewKey(wallet.PublicKey, "auth")
 
 	effectiveTTL := w.ttl
 

@@ -4,6 +4,7 @@ import (
 	"ChainServer/internal/cache/redis"
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/middlewares"
+	"ChainServer/internal/common/types"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -39,7 +40,7 @@ func (r *WalletRoutes) RegisterPublic(router fiber.Router) {
 
 func (r *WalletRoutes) RegisterPrivate(router fiber.Router) {
 	privateGroup := r.walletGroup.Group("/__pri",
-		middlewares.JWTAuthMiddleware[JWTWalletAuthPayload],
+		middlewares.JWTAuthMiddleware[types.JWTWalletAuthPayload],
 	)
 
 	privateGroup.Get("/me", r.handler.GetMe)

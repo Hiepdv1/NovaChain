@@ -2,14 +2,18 @@ package utils
 
 import (
 	"core-blockchain/common/env"
+	"core-blockchain/common/err"
 	"core-blockchain/common/utils"
 	blockchain "core-blockchain/core"
 	"core-blockchain/p2p"
 	"core-blockchain/wallet"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -18,32 +22,6 @@ var conf = env.New()
 var (
 	checkSumlength = conf.WalletAddressCheckSum
 )
-
-type CommandLine struct {
-	Blockchain    *blockchain.Blockchain
-	P2P           *p2p.Network
-	CloseDbAlways bool
-}
-
-type Error struct {
-	Code    int64
-	Message string
-}
-
-type BalanceResponse struct {
-	Balance   float64
-	Address   string
-	Timestamp int64
-	Error     *Error
-}
-
-type SendResponse struct {
-	SendTo    string
-	SendFrom  string
-	Amount    float64
-	Timestamp int64
-	Error     *Error
-}
 
 func (cli *CommandLine) CreateBlockchain() {
 
@@ -95,119 +73,117 @@ func (cli *CommandLine) UpdateInstance(InstanceId string, closeDbAlways bool) *C
 	return cli
 }
 
-func (cli *CommandLine) Send(from, to string, amount, fee float64, mineNow bool) SendResponse {
-	if !wallet.ValidateAddress(from) {
-		log.Error("SendFrom address is Invalid ")
-		return SendResponse{
-			Error: &Error{
-				Code:    5028,
-				Message: "SendTo address is invalid",
-			},
-		}
-	}
+func (cli *CommandLine) SendTx(txs []*blockchain.Transaction) SendResponse {
 
-	if !wallet.ValidateAddress(to) {
-		log.Error("SendFrom address is Invalid ")
-		return SendResponse{
-			Error: &Error{
-				Code:    5028,
-				Message: "SendFrom address is invalid",
-			},
-		}
-	}
+	listTxs := make([]string, 0)
 
-	chain := cli.Blockchain.ContinueBlockchain()
-	if cli.CloseDbAlways {
-		defer chain.Database.Close()
-	}
-
-	utxos := blockchain.UTXOSet{
-		Blockchain: chain,
-	}
-
-	cwd := false
-	wallets, err := wallet.InitializeWallets(cwd)
-	if err != nil {
-		log.Error("Please import sendFrom wallet into this Node")
-		return SendResponse{
-			Error: &Error{
-				Code:    5028,
-				Message: "Please import sendFrom wallet into this Node",
-			},
-		}
-	}
-
-	wallet, err := wallets.GetWallet(from)
-	if err != nil {
-		log.Error("Please import sendFrom wallet into this Node")
-		return SendResponse{
-			Error: &Error{
-				Code:    5028,
-				Message: "Please import sendFrom wallet into this Node",
-			},
-		}
-	}
-
-	tx, err := blockchain.NewTransaction(&wallet, to, amount, fee, &utxos)
-	if err != nil {
-		log.Error(err)
-		return SendResponse{
-			Error: &Error{
-				Code:    5028,
-				Message: "Failed to execute transaction",
-			},
-		}
-	}
-
-	if mineNow {
-		txs := []*blockchain.Transaction{tx}
-		log.Info("Transaction executed")
-
-		block, err := chain.MineBlock(txs, from, cli.P2P.HandleReoganizeTx)
-
-		if err != nil {
-			log.Error("Failed to mine block: ", err)
+	for _, tx := range txs {
+		if !cli.Blockchain.VerifyTransaction(tx) {
 			return SendResponse{
-				Error: &Error{
-					Code:    5028,
-					Message: "Failed to mine block",
-				},
+				Error: err.ErrInvalidArgument("Transaction invalid", string(tx.ID)),
 			}
 		}
+		listTxs = append(listTxs, string(tx.ID))
+	}
 
-		if block == nil {
-			log.Error("Failed to mine block")
-			return SendResponse{
-				SendFrom:  from,
-				SendTo:    to,
-				Amount:    amount,
-				Timestamp: time.Now().Unix(),
-				Error: &Error{
-					Code:    5028,
-					Message: "Failed to mine block",
-				},
-			}
-		}
-
-		utxos.Update(block)
-
-		if cli.P2P != nil {
-			cli.P2P.Blocks <- block
-		}
-	} else {
-		if cli.P2P != nil {
+	if cli.P2P != nil {
+		for _, tx := range txs {
 			cli.P2P.Transactions <- tx
 		}
 	}
 
 	return SendResponse{
-		SendFrom:  from,
-		SendTo:    to,
-		Amount:    amount,
-		Timestamp: time.Now().Unix(),
-		Error:     nil,
+		Message: "Send transaction successfully",
+		Count:   int64(len(txs)),
+		ListTxs: listTxs,
+		Error:   nil,
 	}
 }
+
+// func (cli *CommandLine) Send(from, to string, amount, fee float64, mineNow bool) SendResponse {
+// 	if !wallet.ValidateAddress(from) {
+// 		log.Error("SendFrom address is Invalid ")
+// 		return SendResponse{
+// 			Error: err.ErrInvalidArgument("SendTo address is invalid"),
+// 		}
+// 	}
+
+// 	if !wallet.ValidateAddress(to) {
+// 		log.Error("SendFrom address is Invalid ")
+// 		return SendResponse{
+// 			Error: err.ErrInvalidArgument("SendFrom address is invalid"),
+// 		}
+// 	}
+
+// 	chain := cli.Blockchain.ContinueBlockchain()
+// 	if cli.CloseDbAlways {
+// 		defer chain.Database.Close()
+// 	}
+
+// 	utxos := blockchain.UTXOSet{
+// 		Blockchain: chain,
+// 	}
+
+// tx, err := blockchain.NewTransaction(&wallet, to, amount, fee, &utxos)
+// if err != nil {
+// 	log.Error(err)
+// 	return SendResponse{
+// 		Error: &err{
+// 			Code:    5028,
+// 			Message: "Failed to execute transaction",
+// 		},
+// 	}
+// }
+
+// 	if mineNow {
+// 		txs := []*blockchain.Transaction{tx}
+// 		log.Info("Transaction executed")
+
+// 		block, err := chain.MineBlock(txs, from, cli.P2P.HandleReoganizeTx)
+
+// 		if err != nil {
+// 			log.Error("Failed to mine block: ", err)
+// 			return SendResponse{
+// 				Error: &Error{
+// 					Code:    5028,
+// 					Message: "Failed to mine block",
+// 				},
+// 			}
+// 		}
+
+// 		if block == nil {
+// 			log.Error("Failed to mine block")
+// 			return SendResponse{
+// 				SendFrom:  from,
+// 				SendTo:    to,
+// 				Amount:    amount,
+// 				Timestamp: time.Now().Unix(),
+// 				Error: &Error{
+// 					Code:    5028,
+// 					Message: "Failed to mine block",
+// 				},
+// 			}
+// 		}
+
+// 		utxos.Update(block)
+
+// 		if cli.P2P != nil {
+// 			cli.P2P.Blocks <- block
+// 		}
+// 	} else {
+// 		if cli.P2P != nil {
+// 			cli.P2P.Transactions <- tx
+// 		}
+// 	}
+
+// 	return SendResponse{
+// 		SendFrom:  from,
+// 		SendTo:    to,
+// 		Amount:    amount,
+// 		Timestamp: time.Now().Unix(),
+// 		Error:     nil,
+// 	}
+// }
 
 func (cli *CommandLine) ComputeUTXOs() {
 	chain := cli.Blockchain.ContinueBlockchain()
@@ -229,10 +205,7 @@ func (cli *CommandLine) GetBalance(address string) BalanceResponse {
 		return BalanceResponse{
 			Address:   address,
 			Timestamp: time.Now().Unix(),
-			Error: &Error{
-				Code:    -32602,
-				Message: "Invalid Address",
-			},
+			Error:     err.ErrInvalidArgument("SendFrom address is invalid"),
 		}
 	}
 	chain := cli.Blockchain.ContinueBlockchain()
@@ -275,7 +248,7 @@ func (cli *CommandLine) CreateWallet() string {
 	return address
 }
 
-func (cli *CommandLine) ListAddresses() {
+func (cli *CommandLine) ListWallet() {
 	cwd := false
 	wallets, err := wallet.InitializeWallets(cwd)
 	utils.ErrorHandle(err)
@@ -283,7 +256,18 @@ func (cli *CommandLine) ListAddresses() {
 	addresses := wallets.GetAllAddress()
 
 	for _, address := range addresses {
-		fmt.Println(address)
+		fmt.Printf("------------------------------ %s ------------------------------\n", address)
+		w, err := wallets.GetWallet(address)
+		if err != nil {
+			log.Panic("Get wallet with error: ", err)
+		}
+		privBytes := w.PrivateKey.D.Bytes()
+		privHex := hex.EncodeToString(privBytes)
+		privWebApp, _ := wallet.EncryptPrivateKeyForExport(privHex)
+		fmt.Printf("PrivateKey For WebApp: %s\n", privWebApp)
+		fmt.Println()
+		fmt.Printf("PublicKey: %s", hex.EncodeToString(w.PublicKey))
+		fmt.Println()
 	}
 }
 
@@ -403,4 +387,45 @@ func (cli *CommandLine) GetBlocksByHeightRange(height, max int64) []*blockchain.
 	}
 
 	return blocks
+}
+
+func (cli *CommandLine) GetBlockByHash(hash []byte) GetBlockResponse {
+	chain := cli.Blockchain.ContinueBlockchain()
+	if cli.CloseDbAlways {
+		defer chain.Database.Close()
+	}
+
+	block, e := chain.GetBlock(hash)
+	if e != nil {
+		if errors.Is(e, badger.ErrKeyNotFound) {
+			return GetBlockResponse{
+				Error: err.ErrNotFound("Block not found"),
+			}
+		}
+
+		return GetBlockResponse{Error: err.ErrInternal("Get block failed", e.Error())}
+
+	}
+
+	return GetBlockResponse{
+		Block: &block,
+		Error: nil,
+	}
+}
+
+func (cli *CommandLine) GetAllUTXOs() *GetAllUTXOsResponse {
+	chain := cli.Blockchain.ContinueBlockchain()
+	if cli.CloseDbAlways {
+		defer chain.Database.Close()
+	}
+
+	txOutputs := chain.FindUTXO()
+
+	return &GetAllUTXOsResponse{
+		Message: "Successfully",
+		Data:    txOutputs,
+		Count:   int64(len(txOutputs)),
+		Error:   nil,
+	}
+
 }

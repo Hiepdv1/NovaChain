@@ -83,32 +83,21 @@ const WalletPage = () => {
   const updateCreateWalletStep = useCallback(
     (stepNumber = 1, isLoading: boolean) => {
       setCreateWalletLoading((prev) => {
-        prev.isLoading = isLoading;
-        prev.modalData.loadingSteps = prev.modalData.loadingSteps.map(
-          (step, ix) => {
-            if (ix === stepNumber - 1) {
-              return {
-                ...step,
-                active: true,
-                completed: false,
-              };
-            } else if (ix < stepNumber - 1) {
-              return {
-                ...step,
-                active: false,
-                completed: true,
-              };
-            }
-
-            return {
-              ...step,
-              active: false,
-              completed: false,
-            };
+        return {
+          ...prev,
+          isLoading: isLoading,
+          modalData: {
+            ...prev.modalData,
+            loadingSteps: prev.modalData.loadingSteps.map((step, ix) => {
+              if (ix === stepNumber - 1) {
+                return { ...step, active: true, completed: false };
+              } else if (ix < stepNumber - 1) {
+                return { ...step, active: false, completed: true };
+              }
+              return { ...step, active: false, completed: false };
+            }),
           },
-        );
-
-        return { ...prev };
+        };
       });
     },
     [],
@@ -117,32 +106,21 @@ const WalletPage = () => {
   const updateImportWalletStep = useCallback(
     (isLoading = false, stepNumber = 1) => {
       setImportWalletLoading((prev) => {
-        prev.isLoading = isLoading;
-        prev.modalData.loadingSteps = prev.modalData.loadingSteps.map(
-          (step, ix) => {
-            if (ix === stepNumber - 1) {
-              return {
-                ...step,
-                active: true,
-                completed: false,
-              };
-            } else if (ix < stepNumber - 1) {
-              return {
-                ...step,
-                active: false,
-                completed: true,
-              };
-            }
-
-            return {
-              ...step,
-              active: false,
-              completed: false,
-            };
+        return {
+          ...prev,
+          isLoading,
+          modalData: {
+            ...prev.modalData,
+            loadingSteps: prev.modalData.loadingSteps.map((step, ix) => {
+              if (ix === stepNumber - 1) {
+                return { ...step, active: true, completed: false };
+              } else if (ix < stepNumber - 1) {
+                return { ...step, active: false, completed: true };
+              }
+              return { ...step, active: false, completed: false };
+            }),
           },
-        );
-
-        return { ...prev };
+        };
       });
     },
     [],

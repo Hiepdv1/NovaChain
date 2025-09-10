@@ -1,15 +1,27 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { ReAuthModal } from '@/shared/types/modal-type';
+import {
+  ReAuthModal,
+  TransactionDetailModalProps,
+  TxVerification,
+} from '@/shared/types/modal-type';
 import { create } from 'zustand';
 
-export type ModalType = { type: 'reauth'; props: ReAuthModal } | { type: null };
+export type ModalType =
+  | { type: 'reauth'; props: ReAuthModal }
+  | {
+      type: 'verifyTx';
+      props: TxVerification;
+    }
+  | { type: 'previewTx'; props: TransactionDetailModalProps }
+  | { type: null };
+
+export interface ModalActions {
+  openModal: (type: ModalType) => void;
+  closeModal: () => void;
+}
 
 interface ModalState {
   modal: ModalType;
-  actions: {
-    openModal: (type: ModalType) => void;
-    closeModal: () => void;
-  };
+  actions: ModalActions;
 }
 
 export const useModalStore = create<ModalState>((set) => ({

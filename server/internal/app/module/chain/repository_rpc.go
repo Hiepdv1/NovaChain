@@ -3,6 +3,7 @@ package chain
 import (
 	"ChainServer/internal/common/client"
 	"ChainServer/internal/common/env"
+	"encoding/hex"
 	"encoding/json"
 )
 
@@ -46,6 +47,42 @@ func (r *rpcChainRepository) GetBlocks(startHash string, limit int) ([]*Block, e
 	}
 
 	return blocks, nil
+
+}
+
+func (r *rpcChainRepository) GetBlockByHash(hash string) (*Block, error) {
+	hashBytes, err := hex.DecodeString(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	params := []any{
+		map[string]any{
+			"hash": hashBytes,
+		},
+	}
+
+	data, err := client.CallRPC(
+		r.env.Fullnode_RPC_URL,
+		"API.GetBlock",
+		params,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var rpcResp client.RPCResponse
+	if err := json.Unmarshal(data, &rpcResp); err != nil {
+		return nil, err
+	}
+
+	var block *Block
+	if err := json.Unmarshal(rpcResp.Result, &block); err != nil {
+		return nil, err
+	}
+
+	return block, nil
 
 }
 

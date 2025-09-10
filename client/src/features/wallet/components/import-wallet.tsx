@@ -27,6 +27,7 @@ import { WalletConnectData } from '../types/wallet';
 import { GetAddress, GetPublicKeyFromPrivateKey } from '@/lib/db/wallet.store';
 import { v4 as uuid } from 'uuid';
 import { useRouter } from 'next/navigation';
+import useWalletContext from '@/components/providers/wallet-provider';
 
 interface ImportWallet {
   onSwitchModal(modalName: ModalName): void;
@@ -56,6 +57,7 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
     currentStep: 1,
   });
 
+  const { refetch } = useWalletContext();
   const router = useRouter();
 
   const refs = useRef<MapRef>({
@@ -268,6 +270,20 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
         toast.error('Failed to copy');
       });
   }, []);
+
+  const onBackToHome = async () => {
+    await refetch();
+    onStepUpdate(false, 1);
+    router.push('/');
+    router.refresh();
+  };
+
+  const onAccessWallet = async () => {
+    await refetch();
+    onStepUpdate(false, 1);
+    router.push('/wallet/me');
+    router.refresh();
+  };
 
   useEffect(() => {
     const { continueBtn } = refs.current;
@@ -508,7 +524,7 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
             </div>
 
             <div className="mt-8 space-y-3">
-              <Button variant="glass" size="md">
+              <Button onClick={onAccessWallet} variant="glass" size="md">
                 <div className="flex items-center justify-center text-[14px]">
                   <span>Access wallet</span>
                   <svg
@@ -521,11 +537,7 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
                 </div>
               </Button>
 
-              <Button
-                onClick={() => router.push('/')}
-                variant="glass"
-                size="md"
-              >
+              <Button onClick={onBackToHome} variant="glass" size="md">
                 <div className="flex items-center justify-center text-[14px]">
                   <svg
                     className="w-5 h-5 mr-2"

@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 # -------------------------
 # Configs
 # -------------------------
-$env:POSTGRES_URL = "postgresql://postgres:1@localhost:5433/chain?sslmode=disable"
+$env:POSTGRES_URL = "postgres://postgres:1@localhost:5433/chain?sslmode=disable"
 $migratePath = "migrations"
 $sqlcConfig = "sqlc.yaml"
 
@@ -17,13 +17,13 @@ $sqlcConfig = "sqlc.yaml"
 # -------------------------
 function migrateUp {
     Write-Host "🚀 Running migrations UP..." -ForegroundColor Green
-    migrate -path $migratePath -database $env:POSTGRES_URL up
+    migrate -path $migratePath -database $env:POSTGRES_URL -verbose up
 }
 
 function migrateDown {
     param([int]$steps)
     Write-Host "⚠️ Rolling back $steps migration(s)..." -ForegroundColor Yellow
-    migrate -path $migratePath -database $env:POSTGRES_URL down $steps
+    migrate -path $migratePath -database $env:POSTGRES_URL -verbose down $steps
 }
 
 function sqlcGen {

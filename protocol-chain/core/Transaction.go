@@ -238,7 +238,7 @@ func (tx *Transaction) String() string {
 
 func InitGenesisTx() *Transaction {
 
-	pubkey, err := hex.DecodeString("35c65154f5407780a2b5e5303fb52d46092a1c4f08ffa8a20c08ed007869af3c9873d5c743aeb610de7ba56fa338ac22a8d863d0f7b67cad3eee653ea2f93e61")
+	pubkey, err := hex.DecodeString("5d5807642aea55229a534a596b0b98c76346abccf85c83d17e7e80cfc9eef4682c85ff581cc4ca8d26244e9d3d9ed0695241c76ac288bb3a9b3b7802da0db4b7")
 
 	if err != nil {
 		log.Panicf("Failed to decode pubKey: %v", err)
@@ -250,7 +250,7 @@ func InitGenesisTx() *Transaction {
 		Signature: nil,
 		PubKey:    pubkey,
 	}
-	txOut := NewTxOutput(1_111_111, "13eQHPE45d95ayyVoxduzPDt13GWF5is1Q")
+	txOut := NewTxOutput(111_111_111.965185, "1LacjauKAjDJA34hjS9xJ2uEez7pQYqh5N")
 
 	tx := Transaction{
 		ID:      nil,

@@ -138,13 +138,13 @@ const AuthModal = ({
             valid: false,
           });
         },
-        onSuccess: () => {
+        onSuccess: async () => {
+          await refetch?.();
           setSubmit({
             isCancel: false,
             isConfirm: false,
           });
           useModalStore.getState().actions.closeModal();
-          refetch();
         },
       },
     );

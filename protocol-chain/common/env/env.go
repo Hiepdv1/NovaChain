@@ -22,6 +22,8 @@ type Config struct {
 	ListenPort            string
 	Miner                 bool
 	FullNode              bool
+	SystemKey             string
+	Wallet_Padding        string
 }
 
 func New() *Config {
@@ -31,6 +33,8 @@ func New() *Config {
 		ListenPort:            GetEnvAsStr("LISTEN_PORT", ""),
 		Miner:                 GetEnvAsBool("MINER", false),
 		FullNode:              GetEnvAsBool("FULL_NODE", false),
+		SystemKey:             GetEnvAsStr("SYSTEM_KEY", ""),
+		Wallet_Padding:        GetEnvAsStr("WALLET_PADDING", ""),
 	}
 }
 

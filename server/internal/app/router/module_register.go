@@ -4,6 +4,7 @@ import (
 	"ChainServer/internal/app/module/applog"
 	"ChainServer/internal/app/module/chain"
 	"ChainServer/internal/app/module/transaction"
+	"ChainServer/internal/app/module/utxo"
 	"ChainServer/internal/app/module/wallet"
 )
 
@@ -21,11 +22,17 @@ func GetAllModuleRouters() []ModuleRouter {
 
 		transaction.NewTransactionRoutes(
 			transaction.NewDbTransactionRepository(),
+			utxo.NewDbUTXORepository(),
 		),
 
 		wallet.NewWalletRoutes(
 			wallet.NewRPCWalletRepository(),
 			wallet.NewDBWalletRepository(),
+		),
+
+		utxo.NewUTXORoutes(
+			utxo.NewRPCUtxoRepository(),
+			utxo.NewDbUTXORepository(),
 		),
 	}
 }
