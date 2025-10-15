@@ -2,12 +2,11 @@ package blockchain
 
 import (
 	"bytes"
-	"core-blockchain/common/utils"
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -25,16 +24,18 @@ type Blockchain struct {
 	InstanceId string
 }
 
+var (
+	MaxTarget = big.NewInt(0x1d00ffff)
+)
+
 const (
-	AdjustmentInterval  = 10
-	TargetBlockTime     = 600 // 10 minute
-	MaxTimestampDrift   = 600 // 10 minute
-	MinDifficulty       = 24
-	MaxDifficulty       = 34
-	MaxDifficultyChange = 0.2
-	CheckpointInterval  = 10
-	BestHeightPrefix    = "lh"
-	CheckpointPrefix    = "checkpoint-"
+	AdjustmentInterval = 10
+	TargetBlockTime    = 600 // 10 minute
+	MaxTimestampDrift  = 600 // 10 minute
+	CheckpointInterval = 10
+	MaxBlockSize       = 1 * 1024 * 1024 // 1mb
+	BestHeightPrefix   = "lh"
+	CheckpointPrefix   = "checkpoint-"
 )
 
 var (
@@ -65,51 +66,73 @@ func Exists(InstanceId string) bool {
 	return DBExists(GetDatabasePath(InstanceId))
 }
 
-func InitBlockchain(instanceId string) *Blockchain {
+func InitBlockchain(instanceId string) (*Blockchain, error) {
 	var lastHash []byte
 	path := GetDatabasePath(instanceId)
 
 	if DBExists(path) {
-		log.Panic("Blockchain already exist")
-		return nil
+		return nil, fmt.Errorf("%s", "Blockchain already exist")
 	} else {
 		if err := os.MkdirAll(path, os.ModePerm); err != nil {
-			panic(err)
+			return nil, err
 		}
 	}
 
 	opts := badger.DefaultOptions(path)
 	opts.ValueDir = path
 	db, err := OpenDB(path, opts)
-	utils.ErrorHandle(err)
+	if err != nil {
+		return nil, err
+	}
 
 	err = db.Update(func(txn *badger.Txn) error {
-		cbtx := InitGenesisTx()
+		cbtx, err := InitGenesisTx(1)
+		if err != nil {
+			return err
+		}
 		log.Info("No existing blockchain found")
 
-		genesis := Genesis(cbtx)
+		genesis, err := Genesis(cbtx)
+		if err != nil {
+			return err
+		}
 
-		genesis.NChainWork = big.NewInt(0)
+		target := CompactToBig(genesis.NBits)
 
-		genesis.NChainWork = genesis.NChainWork.Lsh(big.NewInt(1), uint(genesis.Difficulty))
+		denominator := new(big.Int).Add(target, big.NewInt(1))
 
-		genesis.NChainWork = genesis.NChainWork.Div(big.NewInt(2).Lsh(big.NewInt(2), 256), genesis.NChainWork.Add(genesis.NChainWork, big.NewInt(1)))
+		work := new(big.Int).Div(
+			new(big.Int).Lsh(big.NewInt(1), 256),
+			denominator)
 
-		log.Info("NChainWork: ", genesis.NChainWork)
+		genesis.NChainWork = work
 
-		err = txn.Set(genesis.Hash, genesis.Serialize())
+		log.Infof("NChainWork: %d", genesis.NChainWork)
 
-		utils.ErrorHandle(err)
+		serialize := SerializeBlock(genesis)
+
+		err = txn.Set(genesis.Hash, serialize)
+
+		if err != nil {
+			return err
+		}
+
 		err = txn.Set([]byte(BestHeightPrefix), genesis.Hash)
+
+		if err != nil {
+			return err
+		}
 		lastHash = genesis.Hash
 
 		key := fmt.Sprint(CheckpointPrefix, genesis.Height)
-		err := txn.Set([]byte(key), genesis.Hash)
+		err = txn.Set([]byte(key), genesis.Hash)
 
 		return err
 	})
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		return nil, err
+	}
 
 	chain := &Blockchain{lastHash, db, instanceId}
 
@@ -119,10 +142,10 @@ func InitBlockchain(instanceId string) *Blockchain {
 
 	utxo.Compute()
 
-	return chain
+	return chain, nil
 }
 
-func OpenBadgerDB(instanceId string) *badger.DB {
+func OpenBadgerDB(instanceId string) (*badger.DB, error) {
 	path := GetDatabasePath(instanceId)
 
 	log.Info("Path: ", path)
@@ -138,24 +161,32 @@ func OpenBadgerDB(instanceId string) *badger.DB {
 
 	db, err := OpenDB(path, otps)
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return db
+	return db, nil
 }
 
-func (bc *Blockchain) ContinueBlockchain() *Blockchain {
+func (bc *Blockchain) ContinueBlockchain() (*Blockchain, error) {
 	var lastHash []byte
 	var db *badger.DB
 
 	if bc.Database == nil {
-		db = OpenBadgerDB(bc.InstanceId)
+		database, err := OpenBadgerDB(bc.InstanceId)
+		if err != nil {
+			return nil, err
+		}
+		db = database
 	} else {
 		db = bc.Database
 	}
 
 	err := db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(BestHeightPrefix))
-		utils.ErrorHandle(err)
+		if err != nil {
+			return err
+		}
 
 		lastHash, err = item.ValueCopy(nil)
 
@@ -166,7 +197,7 @@ func (bc *Blockchain) ContinueBlockchain() *Blockchain {
 		lastHash = nil
 	}
 
-	return &Blockchain{LastHash: lastHash, Database: db, InstanceId: bc.InstanceId}
+	return &Blockchain{LastHash: lastHash, Database: db, InstanceId: bc.InstanceId}, nil
 
 }
 
@@ -187,73 +218,45 @@ func (bc *Blockchain) HasBlock(hash []byte) (bool, error) {
 	return true, nil
 }
 
-func (bc *Blockchain) AdjustDifficulty(lastestBlock Block) int64 {
+func (bc *Blockchain) AdjustDifficulty(lastBlock *Block) uint32 {
 
-	if lastestBlock.Height%AdjustmentInterval != 0 {
-		return int64(math.Max(MinDifficulty, float64(lastestBlock.Difficulty)))
+	if lastBlock.Height%AdjustmentInterval != 0 {
+		return lastBlock.NBits
 	}
 
-	blocks := make([]*Block, 0, AdjustmentInterval)
-
-	currentBlockHash := lastestBlock.Hash
-
-	for i := 0; i < AdjustmentInterval && len(currentBlockHash) > 0; i++ {
-		block, err := bc.GetBlock(currentBlockHash)
-
-		if err != nil {
-			return int64(math.Max(MinDifficulty, float64(lastestBlock.Difficulty)))
-		}
-
-		blocks = append(blocks, &block)
-
-		currentBlockHash = block.PrevHash
+	firstHeight := lastBlock.Height - AdjustmentInterval
+	firstBlock, err := bc.GetBlockByHeight(firstHeight)
+	if err != nil {
+		log.Error(err)
+		return lastBlock.NBits
 	}
 
-	for i := 1; i < len(blocks); i++ {
-		if blocks[i].Timestamp >= blocks[i-1].Timestamp {
-			return int64(math.Max(MinDifficulty, float64(lastestBlock.Difficulty)))
-		}
+	actualTimespan := lastBlock.Timestamp - firstBlock.Timestamp
+	targetTimespan := int64(TargetBlockTime * AdjustmentInterval)
 
-		if blocks[i-1].Timestamp-blocks[i].Timestamp >= 3600 {
-			return int64(math.Max(MinDifficulty, float64(lastestBlock.Difficulty)))
-		}
+	if actualTimespan < targetTimespan/4 {
+		actualTimespan = targetTimespan / 4
+	}
+	if actualTimespan > targetTimespan*4 {
+		actualTimespan = targetTimespan * 4
 	}
 
-	actualTime := int64(0)
+	oldTarget := CompactToBig(lastBlock.NBits)
+	newTarget := new(big.Int).Mul(oldTarget, big.NewInt(actualTimespan))
+	newTarget.Div(newTarget, big.NewInt(targetTimespan))
 
-	for i := 1; i < len(blocks); i++ {
-		actualTime += blocks[i-1].Timestamp - blocks[i].Timestamp
+	if newTarget.Cmp(MaxTarget) > 0 {
+		newTarget.Set(MaxTarget)
 	}
 
-	actualTime /= int64(len(blocks))
-
-	expectedTime := int64(TargetBlockTime)
-	ratio := float64(actualTime) / float64(expectedTime)
-
-	newDifficulty := float64(lastestBlock.Difficulty)
-
-	if ratio < 0.5 {
-		newDifficulty *= (1 + MaxDifficultyChange)
-		newDifficulty = math.Ceil(newDifficulty)
-	} else if ratio > 2 {
-		newDifficulty *= (1 - MaxDifficultyChange)
-		newDifficulty = math.Floor(newDifficulty)
-	}
-
-	newDifficulty = math.Max(float64(MinDifficulty), math.Min(MaxDifficulty, newDifficulty))
-
-	log.Printf("Difficulty for block: height=%d, actualTime=%d, ratio=%.2f, newDifficulty=%d",
-		lastestBlock.Height, actualTime, ratio, int(newDifficulty))
-
-	return int64(newDifficulty)
-
+	return BigToCompact(newTarget)
 }
 
-func (bc *Blockchain) IsValidCheckpoint(bl *Block) bool {
+func (bc *Blockchain) IsValidCheckpoint(bl *Block) (bool, error) {
 	prevBlock, err := bc.GetBlock(bl.PrevHash)
 
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	checkpointHeight := (bl.Height / CheckpointInterval) * CheckpointInterval
@@ -262,19 +265,22 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) bool {
 		err := bc.Database.View(func(txn *badger.Txn) error {
 			key := fmt.Sprint(CheckpointPrefix, checkpointHeight)
 			item, err := txn.Get([]byte(key))
-			utils.ErrorHandle(err)
+			if err != nil {
+				return err
+			}
 
 			checkpointHash, err = item.ValueCopy(nil)
 			return err
 		})
 
-		utils.ErrorHandle(err)
+		if err != nil {
+			return false, err
+		}
 
 		checkpointBlock, err := bc.GetBlock(checkpointHash)
 
 		if err != nil || checkpointBlock.Height != checkpointHeight {
-			log.Warn("Checkpoint validation failed")
-			return false
+			return false, err
 		}
 
 		currentHash := prevBlock.PrevHash
@@ -285,24 +291,19 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) bool {
 
 			if err != nil {
 				log.Warnf("Invalid chain: cannot find block with hash %x", currentHash)
-				return false
+				return false, nil
 			}
 
 			if currentBlock.Height != currentHeight-1 {
 				log.Warnf("Height mismatch at block %x: expected %d, got %d", currentHash, currentHeight-1, currentBlock.Height)
-				return false
+				return false, nil
 			}
 
-			prevBlock, err := bc.GetBlock(currentBlock.PrevHash)
+			_, err = bc.GetBlock(currentBlock.PrevHash)
 
 			if err != nil {
 				log.Warnf("Missing previous block %x", currentBlock.PrevHash)
-				return false
-			}
-
-			if currentBlock.Difficulty != bc.AdjustDifficulty(prevBlock) {
-				log.Warnf("Difficulty mismatch at block %x", currentBlock.Hash)
-				return false
+				return false, nil
 			}
 
 			currentHash = currentBlock.PrevHash
@@ -312,17 +313,17 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) bool {
 
 		if checkpointBlock.Height != currentHeight {
 			log.Warnf("Checkpoint mismatch: expected height %d, got %d", checkpointBlock.Height, currentHeight)
-			return false
+			return false, nil
 		}
 
 		if !bytes.Equal(checkpointBlock.Hash, currentHash) {
 			log.Warnf("Checkpoint mismatch: expected %x, got %x", checkpointBlock.Hash, currentHash)
-			return false
+			return false, nil
 		}
 
 	}
 
-	return true
+	return true, nil
 }
 
 func (bc *Blockchain) ComputeChain(lashBlockForkChain Block) error {
@@ -366,13 +367,11 @@ func (bc *Blockchain) ComputeChain(lashBlockForkChain Block) error {
 
 func (bc *Blockchain) IsBlockValid(bl Block) bool {
 	prevBlock, err := bc.GetBlock(bl.PrevHash)
-	utils.ErrorHandle(err)
-	currentTime := time.Now().Unix()
-
-	if bl.Difficulty != bc.AdjustDifficulty(prevBlock) {
-		log.Warn("Difficulty validation failed")
+	if err != nil {
+		log.Error(err)
 		return false
 	}
+	currentTime := time.Now().Unix()
 
 	if !bc.ValidateBlockTransactions(&bl) {
 		log.Warn("Invalid Transaction")
@@ -380,11 +379,31 @@ func (bc *Blockchain) IsBlockValid(bl Block) bool {
 	}
 
 	if bl.Timestamp >= currentTime+MaxTimestampDrift || bl.Timestamp < prevBlock.Timestamp {
-		log.Warnf("Invalid timestamp: too far in future or past. Current timestamp of block %d, MaxTimestampDrift %d", bl.Timestamp, currentTime+MaxDifficulty)
+		log.Warnf("Invalid timestamp: too far in future or past. Current timestamp of block %d, MaxTimestampDrift %d", bl.Timestamp, currentTime+MaxTimestampDrift)
 		return false
 	}
 
-	if !bc.IsValidCheckpoint(&bl) {
+	isValidCheckpoint, err := bc.IsValidCheckpoint(&bl)
+	if err != nil {
+		log.Error(err)
+		return false
+	}
+
+	if !isValidCheckpoint {
+		return false
+	}
+
+	if bl.NBits != bc.AdjustDifficulty(&prevBlock) {
+		return false
+	}
+
+	size, err := bl.Size()
+	if err != nil {
+		log.Error(err)
+		return false
+	}
+
+	if size > MaxBlockSize {
 		return false
 	}
 
@@ -396,37 +415,125 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	var block Block
 
 	err := bc.Database.View(func(txn *badger.Txn) error {
-		if item, err := txn.Get(blockHash); err != nil {
-			return errors.New("Block does not exist")
-		} else {
-			if blockData, err := item.ValueCopy(nil); err != nil {
-				return err
-			} else {
-				block = *block.Deserialize(blockData)
-				return nil
-			}
+		item, err := txn.Get(blockHash)
+
+		if err != nil {
+			return err
 		}
+
+		blockData, err := item.ValueCopy(nil)
+
+		if err != nil {
+			return err
+		}
+
+		b := DeserializeBlockData(blockData)
+
+		block = *b
+
+		return nil
 	})
 
 	if err != nil {
-		return block, err
+		return Block{}, err
 	}
 
 	return block, nil
 
 }
 
-func (bc *Blockchain) GetBlockHashes(blockHash []byte, height int64, max int64) [][]byte {
-	var blocks [][]byte
-	iter := bc.Iterator()
+func (bc *Blockchain) GetBlockByHeight(height int64) (*Block, error) {
+	hash, err := bc.GetBlockHashByHeight(height)
+	if err != nil {
+		return nil, err
+	}
 
-	if iter == nil {
-		return blocks
+	block, err := bc.GetBlock(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &block, nil
+}
+
+func (bc *Blockchain) GetBlockHashByHeight(height int64) ([]byte, error) {
+	var blockHash []byte
+
+	err := bc.Database.View(func(txn *badger.Txn) error {
+		key := fmt.Sprintf("%s%d", CheckpointPrefix, height)
+
+		item, err := txn.Get([]byte(key))
+		if err != nil {
+			return err
+		}
+
+		value, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+
+		blockHash = value
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return blockHash, nil
+}
+
+func (bc *Blockchain) GetBlockLocator() ([][]byte, error) {
+
+	var locator [][]byte
+	step := 1
+	height, err := bc.GetBestHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	for height > 1 {
+		hash, err := bc.GetBlockHashByHeight(height)
+		if err != nil {
+			return nil, err
+		}
+
+		locator = append(locator, hash)
+
+		if len(locator) < 10 {
+			height--
+		} else {
+			height -= int64(step)
+			step *= 2
+		}
+
+	}
+
+	genesisHash, err := bc.GetBlockHashByHeight(1)
+	if err != nil {
+		return nil, err
+	}
+
+	locator = append(locator, genesisHash)
+
+	return locator, nil
+}
+
+func (bc *Blockchain) GetBlockHashes(blockHash []byte, height int64, max int64) ([][]byte, error) {
+	var blocks [][]byte
+	iter, err := bc.Iterator()
+
+	if err != nil {
+		return nil, err
 	}
 
 	for {
 
-		block := iter.Next()
+		block, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
 
 		if block.Height == height && bytes.Equal(block.Hash, blockHash) {
 			break
@@ -443,7 +550,36 @@ func (bc *Blockchain) GetBlockHashes(blockHash []byte, height int64, max int64) 
 		}
 	}
 
-	return blocks
+	return blocks, nil
+}
+
+func (bc *Blockchain) GetBlockRange(blockHash []byte, max int64) ([]Block, error) {
+	var blocks []Block
+	iter, err := bc.Iterator()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+
+		block, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		if len(block.PrevHash) == 0 || block.PrevHash == nil || bytes.Equal(block.Hash, blockHash) {
+			break
+		}
+
+		blocks = append(blocks, *block)
+
+		if int64(len(blocks)) > max {
+			blocks = blocks[int64(len(blocks))-max:]
+		}
+	}
+
+	return blocks, nil
 }
 
 func (bc *Blockchain) GetLastBlock() (*Block, error) {
@@ -467,7 +603,10 @@ func (bc *Blockchain) GetLastBlock() (*Block, error) {
 		}
 
 		err = item.Value(func(val []byte) error {
-			block = *block.Deserialize(val)
+			b := DeserializeBlockData(val)
+
+			block = *b
+
 			return nil
 		})
 
@@ -481,14 +620,21 @@ func (bc *Blockchain) GetLastBlock() (*Block, error) {
 	return &block, nil
 }
 
-func (bc *Blockchain) FindUTXO() map[string]TxOutputs {
+func (bc *Blockchain) FindUTXO() (map[string]TxOutputs, error) {
 	UTXOs := make(map[string]TxOutputs)
 	spentUTXOs := make(map[string][]int64)
 
-	iter := bc.Iterator()
+	iter, err := bc.Iterator()
+
+	if err != nil {
+		return nil, err
+	}
 
 	for {
-		block := iter.Next()
+		block, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
 
 		for _, tx := range block.Transactions {
 			txID := hex.EncodeToString(tx.ID)
@@ -521,14 +667,21 @@ func (bc *Blockchain) FindUTXO() map[string]TxOutputs {
 		}
 	}
 
-	return UTXOs
+	return UTXOs, nil
 }
 
 func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
-	iter := bc.Iterator()
+	iter, err := bc.Iterator()
+	if err != nil {
+		return Transaction{}, nil
+	}
 
 	for {
-		block := iter.Next()
+		block, err := iter.Next()
+
+		if err != nil {
+			return Transaction{}, err
+		}
 
 		for _, tx := range block.Transactions {
 			if bytes.Equal(tx.ID, ID) {
@@ -541,7 +694,7 @@ func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
 		}
 	}
 
-	return Transaction{}, errors.New("No transaction with ID: " + string(ID))
+	return Transaction{}, errors.New("No transaction with ID: " + hex.EncodeToString(ID))
 }
 
 func (bc *Blockchain) GetTransaction(transaction *Transaction) map[string]Transaction {
@@ -551,10 +704,9 @@ func (bc *Blockchain) GetTransaction(transaction *Transaction) map[string]Transa
 		tx, err := bc.FindTransaction(in.ID)
 
 		if err != nil {
-			log.Error("Error: Invalid Transaction Ewww")
+			log.Errorf("Error: Find Transaction With Error %v", err)
+			return nil
 		}
-
-		utils.ErrorHandle(err)
 
 		txs[hex.EncodeToString(tx.ID)] = tx
 	}
@@ -568,7 +720,10 @@ func (bc *Blockchain) SignTransaction(privKey ecdsa.PrivateKey, tx *Transaction)
 }
 
 func (bc *Blockchain) ValidateBlockTransactions(bl *Block) bool {
-	utxos := bc.FindUTXO()
+	utxos, err := bc.FindUTXO()
+	if err != nil {
+		return false
+	}
 
 	for _, tx := range bl.Transactions {
 		if tx.IsMinerTx() {
@@ -595,25 +750,41 @@ func (bc *Blockchain) VerifyTransaction(tx *Transaction) bool {
 		return true
 	}
 
+	utxoSet := UTXOSet{
+		Blockchain: bc,
+	}
+
+	for _, in := range tx.Inputs {
+		outs, _, err := utxoSet.FindUTXOPrefix(in.ID)
+		if err != nil {
+			return false
+		}
+
+		if len(outs.Outputs) == 0 || in.Out >= int64(len(outs.Outputs)) || in.Out < 0 {
+			return false
+		}
+	}
+
 	prevTxs := bc.GetTransaction(tx)
 
 	return tx.Verify(prevTxs)
 }
 
-func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, callback func([]*Transaction)) (*Block, error) {
-
-	publicKey := transactions[0].Inputs[0].ID
+func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, callback func([]*Transaction), ctx context.Context) (*Block, error) {
 	var totalInput float64
 	var totalOuput float64
 
 	for _, tx := range transactions {
+		publicKey := tx.Inputs[0].PubKey
 		if !bc.VerifyTransaction(tx) {
-			log.Panic("Invalid Transaction")
+			log.Error("Invalid Transaction")
+			return nil, nil
 		}
 
 		for _, in := range tx.Inputs {
 			if !bytes.Equal(publicKey, in.PubKey) {
-				panic("Invalid transactions")
+				log.Error("Pubkey Does not math")
+				return nil, nil
 			}
 			tx, err := bc.FindTransaction(in.ID)
 			if err != nil {
@@ -632,11 +803,27 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, cal
 		return nil, err
 	}
 
-	difficulty := bc.AdjustDifficulty(*lastestBlock)
+	nbits := bc.AdjustDifficulty(lastestBlock)
 
-	transactions = append(transactions, bc.GetBlockReward(int64(lastestBlock.Height), address))
+	reward, err := bc.GetBlockReward(int64(lastestBlock.Height+1), address)
 
-	block := CreateBlock(transactions, lastestBlock.Hash, lastestBlock.Height+1, difficulty)
+	if err != nil {
+		return nil, err
+	}
+
+	reward.Outputs[0].Value += totalInput - totalOuput
+
+	transactions = append(transactions, reward)
+
+	block, err := CreateBlock(transactions, lastestBlock.Hash, lastestBlock.Height+1, nbits, ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if block == nil {
+		return nil, nil
+	}
 
 	err = bc.AddBlock(block, callback)
 
@@ -647,33 +834,43 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, cal
 	return block, nil
 }
 
-func (bc *Blockchain) GetBestHeight() int64 {
+func (bc *Blockchain) GetBestHeight() (int64, error) {
 	var lastBlock Block
 
 	err := bc.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(BestHeightPrefix))
-		utils.ErrorHandle(err)
+		if err != nil {
+			return err
+		}
 
 		lastHash, err := item.ValueCopy(nil)
-		utils.ErrorHandle(err)
+		if err != nil {
+			return err
+		}
 
 		item, err = txn.Get(lastHash)
-		utils.ErrorHandle(err)
+		if err != nil {
+			return err
+		}
 
 		lastBlockData, err := item.ValueCopy(nil)
-		utils.ErrorHandle(err)
+		if err != nil {
+			return err
+		}
 
-		lastBlock = *lastBlock.Deserialize(lastBlockData)
+		block := DeserializeBlockData(lastBlockData)
+
+		lastBlock = *block
 
 		return nil
 
 	})
 
 	if err != nil {
-		utils.ErrorHandle(err)
+		return 0, err
 	}
 
-	return lastBlock.Height
+	return lastBlock.Height, nil
 }
 
 func retry(dir string, originalOpts badger.Options) (*badger.DB, error) {

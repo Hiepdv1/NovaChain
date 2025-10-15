@@ -3,13 +3,11 @@ package p2p
 import (
 	"context"
 	"core-blockchain/common/helpers"
-	"core-blockchain/common/utils"
 	"core-blockchain/memopool"
 	cryptoRand "crypto/rand"
 	"fmt"
 	"io"
 	"math/rand"
-	"runtime"
 	"sync"
 	"time"
 
@@ -43,9 +41,9 @@ const (
 )
 
 var (
-	memoryPool = memopool.Memopool{
-		Pending: map[string]blockchain.Transaction{},
-		Queued:  map[string]blockchain.Transaction{},
+	MemoryPool = memopool.Memopool{
+		Pending: map[string]memopool.TxInfo{},
+		Queued:  map[string]memopool.TxInfo{},
 	}
 	MinerAddress = ""
 )
@@ -62,7 +60,10 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 	go helpers.CloseDB(bc)
 
 	prvKey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	transports := libp2p.ChainOptions(
 		libp2p.Transport(tcp.NewTCPTransport),
@@ -91,7 +92,10 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 		libp2p.EnableRelayService(),
 		libp2p.Security(noise.ID, noise.New),
 	)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	for _, addr := range host.Addrs() {
 		log.Infoln("Listening on ", addr)
@@ -100,10 +104,16 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 	log.Info("Host Created: ", host.ID())
 
 	pub, err := pubsub.NewGossipSub(ctx, host)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	generalChannel, err := JoinChannel(ctx, pub, host.ID(), GeneralChannel, true)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	subscribe := false
 	if miner {
@@ -111,60 +121,68 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 	}
 
 	miningChannel, err := JoinChannel(ctx, pub, host.ID(), MiningChannel, subscribe)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	subscribe = false
-	if fullNode {
+	if fullNode || miner {
 		subscribe = true
 	}
 
 	fullNodesChannel, err := JoinChannel(ctx, pub, host.ID(), FullNodesChannel, subscribe)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	ui := NewCLIUI(generalChannel, miningChannel, fullNodesChannel)
 
 	err = SetupDiscovery(ctx, host)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	g := NewGossipManager(time.Minute)
+	defer g.Stop()
+	syncManager := NewSyncManager()
 
 	network := &Network{
 		Host:             host,
-		GeneralChannel:   generalChannel,
 		MiningChannel:    miningChannel,
 		FullNodesChannel: fullNodesChannel,
 		Blockchain:       bc,
 		Blocks:           make(chan *blockchain.Block, 200),
-		Transactions:     make(chan *blockchain.Transaction, 200),
+		Transactions:     make(chan []*blockchain.Transaction, 200),
 		Miner:            miner,
 
-		competingBlockChan:         make(chan *blockchain.Block, 200),
-		blockProcessingLimiter:     make(chan struct{}, 200),
-		txProcessingLimiter:        make(chan struct{}, runtime.NumCPU()),
+		competingBlockChan: make(chan *blockchain.Block, 200),
+
 		peersSyncedWithLocalHeight: []string{},
-		isSynced:                   make(chan struct{}, 1),
 		syncCompleted:              false,
+
+		Gossip:      g,
+		syncManager: syncManager,
+	}
+
+	worker := NewWorker(1000, ctx, Error, func(content *ChannelContent) {
+		ui.HandleStream(network, content)
+	})
+	worker.Start(1)
+
+	network.worker = worker
+
+	go HandleEvents(network)
+
+	if miner {
+		go network.MinersEventLoop()
 	}
 
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-
-	EventLoop:
-		for {
-			select {
-			case <-ticker.C:
-				log.Info("Broadcasting header request to all peers")
-				BroadcastHeaderRequest(network)
-			case <-network.isSynced:
-				log.Info("Network is synced with local height")
-				network.syncCompleted = true
-				break EventLoop
-			}
-		}
-
-		go HandleEvents(network)
-
-		if miner {
-			go network.MinersEventLoop()
-		}
+		time.Sleep(20 * time.Second)
+		network.HandleRequestSync()
 	}()
 
 	if err := ui.Run(network, callback); err != nil {
@@ -175,7 +193,9 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 
 func SetupDiscovery(ctx context.Context, host host.Host) error {
 	kademliaDHT, err := dht.New(ctx, host, dht.Mode(dht.ModeAuto))
-	utils.ErrorHandle(err)
+	if err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 	for _, peerAddr := range dht.DefaultBootstrapPeers {
@@ -224,7 +244,9 @@ func SetupDiscovery(ctx context.Context, host host.Host) error {
 
 	log.Info("Searching for other peers...")
 	peerChan, err := routingDiscovery.FindPeers(ctx, Rendezvous)
-	utils.ErrorHandle(err)
+	if err != nil {
+		return err
+	}
 
 	for peer := range peerChan {
 		if peer.ID == host.ID() {
@@ -241,18 +263,4 @@ func SetupDiscovery(ctx context.Context, host host.Host) error {
 	}
 
 	return nil
-}
-
-func (net *Network) BelongsToMiningGroup(peerID string) bool {
-	peers := net.MiningChannel.ListPeers()
-
-	for _, peer := range peers {
-		ID := peer.String()
-
-		if ID == peerID {
-			return true
-		}
-	}
-
-	return false
 }

@@ -15,7 +15,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -51,8 +50,8 @@ func (s *WalletService) CreateWallet(dto *dto.WalletParsed) (*string, *apperror.
 	}
 
 	wallet, err := s.dbRepo.CreateWallet(ctx, dbwallet.CreateWalletParams{
-		PublicKey:     hex.EncodeToString(dto.PublicKey),
-		Address:       dto.Addr,
+		PublicKey:     helpers.StringToNullString(hex.EncodeToString(dto.PublicKey)),
+		Address:       helpers.StringToNullString(dto.Addr),
 		PublicKeyHash: hex.EncodeToString(utils.PublicKeyHash(dto.PublicKey)),
 		Balance:       "0",
 		CreateAt: sql.NullTime{
@@ -72,8 +71,8 @@ func (s *WalletService) CreateWallet(dto *dto.WalletParsed) (*string, *apperror.
 
 	payload := types.JWTWalletAuthPayload{
 		ID:      wallet.ID.String(),
-		Address: wallet.Address,
-		Pubkey:  wallet.PublicKey,
+		Address: wallet.Address.String,
+		Pubkey:  wallet.PublicKey.String,
 	}
 
 	token, err := utils.SignJWT(
@@ -122,12 +121,13 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 			}
 
 			if balance.Error != nil {
+				log.Error(balance.Error.Message)
 				return nil, apperror.BadRequest("Import wallet failed", errors.New(balance.Error.Message))
 			}
 
 			newWallet, err := s.dbRepo.CreateWallet(ctx, dbwallet.CreateWalletParams{
-				PublicKey:     hex.EncodeToString(dto.PublicKey),
-				Address:       dto.Addr,
+				PublicKey:     helpers.StringToNullString(hex.EncodeToString(dto.PublicKey)),
+				Address:       helpers.StringToNullString(dto.Addr),
 				PublicKeyHash: pubKeyHash,
 				Balance:       helpers.FormatDecimal(balance.Balance, 8),
 				CreateAt: sql.NullTime{
@@ -153,16 +153,17 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 		}
 	}
 
-	if wallet.Address == "-" || wallet.PublicKey == "-" {
+	if !wallet.Address.Valid || !wallet.PublicKey.Valid {
 		walletUpdated, err := s.dbRepo.UpdateWalletInfoByWalletID(ctx, dbwallet.UpdateWalletInfoByWalletIDParams{
-			PublicKey:     sql.NullString{String: hex.EncodeToString(dto.PublicKey), Valid: true},
-			PublicKeyHash: sql.NullString{String: pubKeyHash, Valid: true},
-			Balance:       sql.NullString{Valid: false},
-			Address:       sql.NullString{String: "0x123...", Valid: true},
+			PublicKey:     helpers.StringToNullString(hex.EncodeToString(dto.PublicKey)),
+			Address:       helpers.StringToNullString(dto.Addr),
+			PublicKeyHash: helpers.StringToNullString(pubKeyHash),
+			Balance:       helpers.StringToNullString(""),
 			ID:            wallet.ID,
 		}, nil)
 
 		if err != nil {
+			log.Error(err)
 			return nil, errInternalCommon
 		}
 
@@ -171,8 +172,8 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 
 	payload := types.JWTWalletAuthPayload{
 		ID:      wallet.ID.String(),
-		Address: wallet.Address,
-		Pubkey:  wallet.PublicKey,
+		Address: wallet.Address.String,
+		Pubkey:  wallet.PublicKey.String,
 	}
 
 	token, err := utils.SignJWT(
@@ -223,16 +224,6 @@ func (s *WalletService) GetWallet(pubkey []byte) (*dbwallet.Wallet, *apperror.Ap
 
 	key := hex.EncodeToString(pubkey)
 
-	walletCache, err := s.cacheRepo.GetWalletById(ctx, key)
-
-	if err != nil {
-		if err != redis.Nil {
-			log.Errorf("Failed to get wallet cache with pubKey %s: %v", key, err)
-		}
-	} else {
-		return walletCache, nil
-	}
-
 	wallet, err := s.dbRepo.GetWalletByPubkey(ctx, pubkey, nil)
 
 	if err != nil {
@@ -243,8 +234,6 @@ func (s *WalletService) GetWallet(pubkey []byte) (*dbwallet.Wallet, *apperror.Ap
 		log.Error("Get wallet failed ", err)
 		return nil, apperror.Internal("Something went wrong. Please try again.", nil)
 	}
-
-	err = s.cacheRepo.AddWallet(ctx, *wallet)
 
 	if err != nil {
 		log.Errorf("Failed to set wallet cache with pubKey %s: %v", key, err)

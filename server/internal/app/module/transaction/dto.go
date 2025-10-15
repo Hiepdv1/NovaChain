@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"ChainServer/internal/common/apperror"
+	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/utils"
 	"encoding/hex"
 	"time"
@@ -13,12 +14,94 @@ type TransactionDataDto struct {
 	To        string  `json:"to" validate:"required,len=34"`
 	Timestamp int64   `json:"timestamp" validate:"required,gt=0"`
 	Message   string  `json:"message"`
+	Priority  uint64  `json:"priority" validate:"required,gte=0"`
 }
 
 type NewTransactionDto struct {
-	Data   TransactionDataDto `json:"data" validate:"required"`
-	Sig    string             `json:"sig" validate:"required,hexadecimal"`
-	PubKey string             `json:"pubKey" validate:"required,hexadecimal"`
+	Data TransactionDataDto `json:"data" validate:"required"`
+	Sig  string             `json:"sig" validate:"required,hexadecimal"`
+}
+
+type SendTransactionDataDto struct {
+	Amount          float64         `json:"amount" validate:"required,gt=0"`
+	Fee             float64         `json:"fee" validate:"required,gt=0"`
+	Message         string          `json:"message"`
+	ReceiverAddress string          `json:"receiverAddress" validate:"required,len=34"`
+	Priority        uint            `json:"priority" validate:"required,gte=0"`
+	Transaction     dto.Transaction `json:"transaction" validate:"required"`
+}
+
+type SendTransactionDto struct {
+	Data SendTransactionDataDto `json:"data" validate:"required"`
+	Sig  string                 `json:"sig" validate:"required,hexadecimal"`
+}
+
+func (s *SendTransactionDto) ValidateAndParse() (any, error) {
+
+	var inputs []TxInput
+	var outputs []TxOutput
+
+	txID, err := hex.DecodeString(s.Data.Transaction.ID)
+	if err != nil {
+		return nil, apperror.BadRequest("TxID is not format", nil)
+	}
+
+	if !utils.ValidateAddress(s.Data.ReceiverAddress) {
+		return nil, apperror.BadRequest("Receiver address is invalid. It must be a valid blockchain address (34 characters, base58).", nil)
+	}
+
+	for _, in := range s.Data.Transaction.Inputs {
+		inId, err := hex.DecodeString(in.ID)
+		if err != nil {
+			return nil, apperror.BadRequest("inID is not format", nil)
+		}
+
+		sigByte, err := hex.DecodeString(in.Signature)
+		if err != nil {
+			return nil, apperror.BadRequest("sig is not format", nil)
+		}
+
+		pubkey, err := hex.DecodeString(in.PubKey)
+		if err != nil {
+			return nil, apperror.BadRequest("pubkey is not format", nil)
+		}
+
+		input := TxInput{
+			ID:        inId,
+			Out:       in.Out,
+			Signature: sigByte,
+			PubKey:    pubkey,
+		}
+		inputs = append(inputs, input)
+	}
+
+	for _, out := range s.Data.Transaction.Outputs {
+		pubKeyHash, err := hex.DecodeString(out.PubKeyHash)
+		if err != nil {
+			return nil, apperror.BadRequest("pubkey is not format", nil)
+		}
+
+		outputs = append(outputs, TxOutput{
+			Value:      out.Value,
+			PubKeyHash: pubKeyHash,
+		})
+	}
+
+	tx := Transaction{
+		ID:      txID,
+		Inputs:  inputs,
+		Outputs: outputs,
+	}
+
+	return SendTransactionDataParsed{
+		Message:      s.Data.Message,
+		Priority:     s.Data.Priority,
+		Transaction:  tx,
+		ReceiverAddr: s.Data.ReceiverAddress,
+		Fee:          s.Data.Fee,
+		Amount:       s.Data.Amount,
+	}, nil
+
 }
 
 func (tx *NewTransactionDto) ValidateAndParse() (any, error) {
@@ -43,11 +126,6 @@ func (tx *NewTransactionDto) ValidateAndParse() (any, error) {
 		return nil, apperror.BadRequest("Invalid signature format. It must be a valid hexadecimal string.", err)
 	}
 
-	pubKeyBytes, err := hex.DecodeString(tx.PubKey)
-	if err != nil {
-		return nil, apperror.BadRequest("Invalid public key format. It must be a valid hexadecimal string.", err)
-	}
-
 	toAddrBytes, err := utils.Base58Decode(tx.Data.To)
 
 	if err != nil {
@@ -60,10 +138,8 @@ func (tx *NewTransactionDto) ValidateAndParse() (any, error) {
 			Amount:    tx.Data.Amount,
 			To:        toAddrBytes,
 			Timestamp: time.Unix(tx.Data.Timestamp, 0),
-			Message:   tx.Data.Message,
 		},
-		Sig:    sigBytes,
-		PubKey: pubKeyBytes,
+		Sig: sigBytes,
 	}
 
 	return parsed, nil

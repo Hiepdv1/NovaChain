@@ -18,10 +18,10 @@ func NewAppLogService(repo AppLogRepository) *AppLogService {
 }
 
 func (s *AppLogService) GetListAppLogError(dto dto.PaginationQuery) ([]*LogEntry, *response.PaginationMeta, *apperror.AppError) {
-	limit := int(*dto.Limit)
-	page := int(*dto.Page)
+	limit := *dto.Limit
+	page := *dto.Page
 
-	logs, err := s.repo.ReadPaginatedErrorLogs(page, limit)
+	logs, err := s.repo.ReadPaginatedErrorLogs(int(page), int(limit))
 	if err != nil {
 		return nil, nil, apperror.Internal("Failed to get applogs", err)
 	}
@@ -32,9 +32,9 @@ func (s *AppLogService) GetListAppLogError(dto dto.PaginationQuery) ([]*LogEntry
 	}
 
 	pagination := helpers.BuildPaginationMeta(
-		int32(limit),
-		int32(page),
-		int32(count),
+		limit,
+		page,
+		int64(count),
 		nil,
 	)
 

@@ -1,7 +1,6 @@
 package transaction
 
 import (
-	"ChainServer/internal/app/module/utxo"
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/middlewares"
 	"ChainServer/internal/common/types"
@@ -14,7 +13,7 @@ type TransactionRoutes struct {
 	transactionGroup fiber.Router
 }
 
-func NewTransactionRoutes(dbRepo DbTransactionRepository, utxoRepo utxo.DbUTXORepository) *TransactionRoutes {
+func NewTransactionRoutes(dbRepo DbTransactionRepository, utxoRepo DbUTXORepository) *TransactionRoutes {
 	service := NewTransactionService(dbRepo, utxoRepo)
 	handler := NewTransactionHandler(service)
 
@@ -28,7 +27,11 @@ func (r *TransactionRoutes) InitRoutes(router fiber.Router) {
 func (r *TransactionRoutes) RegisterPublic(router fiber.Router) {
 	publicGroup := r.transactionGroup.Group("/__pub")
 
-	publicGroup.Get("/", middlewares.ValidateQuery[dto.PaginationQuery](), r.handler.GetListTransaction)
+	publicGroup.Get("/",
+		middlewares.ValidateQuery[dto.PaginationQuery](false),
+		r.handler.GetListTransaction,
+	)
+
 }
 
 func (r *TransactionRoutes) RegisterPrivate(router fiber.Router) {
@@ -36,9 +39,23 @@ func (r *TransactionRoutes) RegisterPrivate(router fiber.Router) {
 		middlewares.JWTAuthMiddleware[types.JWTWalletAuthPayload],
 	)
 
+	privateGroup.Get("/pending",
+		middlewares.ValidateQuery[dto.PaginationQuery](false),
+		r.handler.GetListTransactionPending,
+	)
+
 	privateGroup.Post("/new",
-		VerifyCreateTransactionSig,
-		middlewares.ValidateBody[NewTransactionDto](),
+		middlewares.DecryptBodyMiddleware(nil),
+		middlewares.ValidateBody[NewTransactionDto](true),
+		VerifyCreateSignatureMiddleware,
 		r.handler.CreateNewTransaction,
 	)
+
+	privateGroup.Post("/send",
+		middlewares.DecryptBodyMiddleware(nil),
+		middlewares.ValidateBody[SendTransactionDto](true),
+		VerifySendPayloadMiddleware,
+		r.handler.SendTransaction,
+	)
+
 }

@@ -1,10 +1,14 @@
-import { Fragment } from 'react';
+import ActivityComponent from '../components/Activity';
+import OverviewComponent from '../components/overview';
 
 const HomePage = () => {
   return (
-    <Fragment>
-      <section>This is content</section>
-    </Fragment>
+    <section className="glass-card overflow-hidden dark:bg-primary-dark/5 dark:border-secondary-dark rounded-2xl">
+      <div className="animate-dashboard-fade-in  p-6">
+        <OverviewComponent />
+        <ActivityComponent />
+      </div>
+    </section>
   );
 };
 

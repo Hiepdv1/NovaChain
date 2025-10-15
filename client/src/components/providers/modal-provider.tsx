@@ -1,13 +1,23 @@
 'use client';
 
 import { useModalStore } from '@/stores/modal-store';
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import AuthModal from '../modals/auth-modal';
 import VerifyTransaction from '../modals/tx-verification';
 import TransactionDetailModal from '../modals/transaction-detail-modal';
+import { useQueryClient } from '@tanstack/react-query';
 
 const ModalProvider = () => {
   const { modal, actions } = useModalStore();
+  const queryClient = useQueryClient();
+  const prevType = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (prevType.current && !modal.type) {
+      queryClient.invalidateQueries();
+    }
+    prevType.current = modal.type;
+  }, [modal.type, queryClient]);
 
   return (
     <Fragment>

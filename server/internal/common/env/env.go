@@ -28,6 +28,9 @@ type Env struct {
 	Jwt_Secret_Key                  string
 	Jwt_TTL_Minutes                 int64
 	Domain_Client                   string
+	CheckSumLength                  int64
+	Version                         int64
+	Encode_data_secret_Key          []byte
 }
 
 var Cfg *Env
@@ -44,6 +47,9 @@ func InitEnv() {
 			Jwt_Secret_Key:                  GetEnvAsString("JWT_SECRET_KEY", "default_secret_key"),
 			Jwt_TTL_Minutes:                 GetEnvAsInt("JWT_TTL_MINUTES", 1800),
 			Domain_Client:                   GetEnvAsString("DOMAIN_CLIENT", "localhost"),
+			CheckSumLength:                  GetEnvAsInt("CHECK_SUM_LENGTH", 4),
+			Version:                         GetEnvAsInt("VERSION", 0x00),
+			Encode_data_secret_Key:          GetEnvAsBytes("ENCODE_DATA_SECRET_KEY", []byte("")),
 		}
 	})
 }
@@ -92,6 +98,15 @@ func GetEnvAsBool(key string, defaultValue bool) bool {
 
 	if value, err := strconv.ParseBool(valueStr); err == nil {
 		return value
+	}
+
+	return defaultValue
+}
+
+func GetEnvAsBytes(key string, defaultValue []byte) []byte {
+	valueStr := GetEnvVariable(key)
+	if valueStr != "" {
+		return []byte(valueStr)
 	}
 
 	return defaultValue

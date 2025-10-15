@@ -28,6 +28,8 @@ export const useModalStore = create<ModalState>((set) => ({
   modal: { type: null },
   actions: {
     openModal: (modal: ModalType) => set({ modal }),
-    closeModal: () => set({ modal: { type: null } }),
+    closeModal: () => {
+      set({ modal: { type: null } });
+    },
   },
 }));

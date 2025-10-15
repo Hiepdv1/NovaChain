@@ -5,13 +5,9 @@ import (
 	"ChainServer/internal/common/types"
 )
 
-type TxOutputs struct {
-	Outputs []types.TxOutput
-}
-
 type GetAllUTXOsRPC struct {
 	Message string
-	Data    map[string]TxOutputs
+	Data    map[string]types.TxOutputs
 	Count   int64
 	Error   *client.RPCError
 }

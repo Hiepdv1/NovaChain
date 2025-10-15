@@ -20,6 +20,7 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
     refetchOnReconnect: false,
     refetchOnMount: false,
   });
+
   const refetch = async () => {
     await Promise.all([walletQuery.refetch()]);
   };

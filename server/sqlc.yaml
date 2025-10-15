@@ -1,4 +1,5 @@
 version: "2"
+
 sql:
   - engine: "postgresql"
     queries: "db/chain/query.sql"
@@ -7,6 +8,27 @@ sql:
       go:
         package: "dbchain"
         out: "internal/db/chain"
+        emit_prepared_queries: false
+        overrides:
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "text"
+            go_type: "string"
+
+  - engine: "postgresql"
+    queries:
+      - "db/pendingTx/queries/pending_transactions.sql"
+      - "db/pendingTx/queries/pending_tx_data.sql"
+    schema: "db/pendingTx/schema.sql"
+    gen:
+      go:
+        package: "dbPendingTx"
+        out: "internal/db/pendingTx"
+        overrides:
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "text"
+            go_type: "string"
 
   - engine: "postgresql"
     queries: "db/utxo/query.sql"
@@ -15,6 +37,11 @@ sql:
       go:
         package: "dbutxo"
         out: "internal/db/utxo"
+        overrides:
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "text"
+            go_type: "string"
       
   - engine: "postgresql"
     queries: "db/wallet/query.sql"
@@ -23,3 +50,8 @@ sql:
       go:
         package: "dbwallet"
         out: "internal/db/wallet"
+        overrides:
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "text"
+            go_type: "string"

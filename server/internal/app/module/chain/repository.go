@@ -13,6 +13,15 @@ type RPCChainRepository interface {
 }
 
 type DBChainRepository interface {
+	CountFuzzy(ctx context.Context, content string) (int64, error)
+	CountFuzzyByType(ctx context.Context, content string) ([]dbchain.CountFuzzyByTypeRow, error)
+	SearchExact(ctx context.Context, content string) ([]dbchain.SearchExactRow, error)
+	SearchFuzzy(ctx context.Context, arg dbchain.SearchFuzzyParams) ([]dbchain.SearchFuzzyRow, error)
+	CountDistinctMiners(ctx context.Context, tx *sql.Tx) (int64, error)
+	GetCountTodayWorkerMiners(ctx context.Context, tx *sql.Tx) (int64, error)
+	GetListBlockByHours(ctx context.Context, hours int64, tx *sql.Tx) ([]dbchain.Block, error)
+	GetBestHeight(ctx context.Context, tx *sql.Tx) (int64, error)
+	GetBlockCountByHours(ctx context.Context, hours int64, tx *sql.Tx) (int64, error)
 	CreateBlock(ctx context.Context, args dbchain.CreateBlockParams, tx *sql.Tx) (dbchain.Block, error)
 	GetBlockByHeight(ctx context.Context, height int64, tx *sql.Tx) (dbchain.Block, error)
 	GetLastBlock(ctx context.Context, tx *sql.Tx) (dbchain.Block, error)

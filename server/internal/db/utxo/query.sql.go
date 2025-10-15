@@ -7,7 +7,6 @@ package dbutxo
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -22,7 +21,7 @@ RETURNING id, tx_id, output_index, value, pub_key_hash, block_id
 `
 
 type CreateUTXOParams struct {
-	TxID        sql.NullString
+	TxID        string
 	OutputIndex int64
 	Value       string
 	PubKeyHash  string
@@ -55,7 +54,7 @@ WHERE tx_id = $1 AND output_index = $2
 `
 
 type DeleteUTXOParams struct {
-	TxID        sql.NullString
+	TxID        string
 	OutputIndex int64
 }
 
@@ -114,13 +113,38 @@ func (q *Queries) GetUTXOByPubKeyHash(ctx context.Context, pubKeyHash string) (U
 	return i, err
 }
 
+const getUTXOByTxIDAndOut = `-- name: GetUTXOByTxIDAndOut :one
+SELECT id, tx_id, output_index, value, pub_key_hash, block_id FROM utxos
+WHERE tx_id = $1 AND output_index = $2
+LIMIT 1
+`
+
+type GetUTXOByTxIDAndOutParams struct {
+	TxID        string
+	OutputIndex int64
+}
+
+func (q *Queries) GetUTXOByTxIDAndOut(ctx context.Context, arg GetUTXOByTxIDAndOutParams) (Utxo, error) {
+	row := q.db.QueryRowContext(ctx, getUTXOByTxIDAndOut, arg.TxID, arg.OutputIndex)
+	var i Utxo
+	err := row.Scan(
+		&i.ID,
+		&i.TxID,
+		&i.OutputIndex,
+		&i.Value,
+		&i.PubKeyHash,
+		&i.BlockID,
+	)
+	return i, err
+}
+
 const getUTXOByTxOut = `-- name: GetUTXOByTxOut :one
 SELECT id, tx_id, output_index, value, pub_key_hash, block_id FROM utxos
 WHERE tx_id = $1 AND output_index = $2 LIMIT 1
 `
 
 type GetUTXOByTxOutParams struct {
-	TxID        sql.NullString
+	TxID        string
 	OutputIndex int64
 }
 
@@ -180,7 +204,7 @@ WHERE tx_id = $1
 ORDER BY output_index
 `
 
-func (q *Queries) GetUTXOsByTxID(ctx context.Context, txID sql.NullString) ([]Utxo, error) {
+func (q *Queries) GetUTXOsByTxID(ctx context.Context, txID string) ([]Utxo, error) {
 	rows, err := q.db.QueryContext(ctx, getUTXOsByTxID, txID)
 	if err != nil {
 		return nil, err

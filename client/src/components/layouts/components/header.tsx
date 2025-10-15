@@ -13,10 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useDisconnectWalletMutation } from '@/features/wallet/hook/useWalletQuery';
+import { useDisconnectWalletMutation } from '@/features/wallet/hook/useWalletMutation';
 import { DelWalletPool, GetWalletPool } from '@/lib/db/wallet.index';
 import { formatAddress } from '@/lib/utils';
 import { StoredWallet } from '@/shared/types/wallet';
+import { frameData } from 'framer-motion';
 import {
   Activity,
   Check,
@@ -29,8 +30,8 @@ import {
   Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { FormEvent, useEffect, useState } from 'react';
 
 interface MenuItem {
   id: number;
@@ -70,6 +71,8 @@ const Header = () => {
   const [wallet, setWallet] = useState<StoredWallet | null>(null);
   const [copied, setCopied] = useState(false);
   const { mutate: disconnectWallet } = useDisconnectWalletMutation();
+  const searchParams = useSearchParams();
+  const query = searchParams.get('result_search');
   const router = useRouter();
 
   useEffect(() => {
@@ -114,6 +117,15 @@ const Header = () => {
     router.refresh();
   };
 
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+    const data = Object.fromEntries(formData) as { result_search: string };
+
+    router.push(`/search?result_search=${data.result_search}`);
+  };
+
   return (
     <header className="shadow-xl dark:shadow-lg dark:ring-2 dark:ring-white/10 backdrop-blur-lg bg-gradient-glass dark:bg-gradient-glass-dark border-b border-white/20 dark:border-gray-700/50 sticky top-0 z-50">
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -133,10 +145,10 @@ const Header = () => {
             </Link>
 
             <div>
-              <h1 className="text-sm font-bold bg-gradient-primary bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold bg-gradient-primary bg-clip-text text-transparent">
                 CryptoChain
               </h1>
-              <p className="text-[10px] text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 Explorer
               </p>
             </div>
@@ -144,19 +156,20 @@ const Header = () => {
 
           {/* Search Bar */}
           <div className="hidden md:flex items-center flex-1 max-w-lg mx-8">
-            <form className="relative w-full">
+            <form onSubmit={onSubmit} className="relative w-full">
               <Input
                 variant="levitating"
                 inputSize="sm"
-                className="dark:text-white pl-10 pr-4 dark:!bg-transparent dark:placeholder:text-white placeholder:text-black border-slate-400 font-normal py-3 rounded-xl !bg-gradient-glass text-xs text-black"
+                className="dark:text-white pl-10 pr-8 dark:!bg-transparent dark:placeholder:text-white placeholder:text-black border-slate-400 font-normal py-3 rounded-xl !bg-gradient-glass text-sm text-black"
                 id="search"
-                name="s"
+                name="result_search"
+                defaultValue={query || ''}
                 placeholder="Search by address, tx hash, or block ...."
               />
 
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <svg
-                  className="w-4.5 h-4.5 text-gray-400"
+                  className="w-5 h-5 text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"

@@ -56,3 +56,13 @@ func (r *dbUTXORepository) FindUTXOs(ctx context.Context, pubKeyHash string, tx 
 
 	return q.GetUTXOsByPubKeyHash(ctx, pubKeyHash)
 }
+
+func (r *dbUTXORepository) GetUTXOByTxIDAndOut(ctx context.Context, arg dbutxo.GetUTXOByTxIDAndOutParams, tx *sql.Tx) (dbutxo.Utxo, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetUTXOByTxIDAndOut(ctx, arg)
+}

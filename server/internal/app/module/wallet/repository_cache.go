@@ -46,7 +46,7 @@ func (w *walletCacheRepository) GetWalletById(ctx context.Context, pubkeyHex str
 }
 
 func (w *walletCacheRepository) AddWallet(ctx context.Context, wallet dbwallet.Wallet, ttl ...time.Duration) error {
-	key := w.NewKey(wallet.PublicKey, "auth")
+	key := w.NewKey(wallet.PublicKey.String, "auth")
 
 	effectiveTTL := w.ttl
 

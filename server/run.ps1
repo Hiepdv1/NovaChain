@@ -1,6 +1,7 @@
 param(
     [string]$cmd = "run",
-    [int]$steps = 1
+    [int]$steps = 1,
+    [string]$name = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,7 +14,7 @@ $migratePath = "migrations"
 $sqlcConfig = "sqlc.yaml"
 
 # -------------------------
-# Method
+# Methods
 # -------------------------
 function migrateUp {
     Write-Host "🚀 Running migrations UP..." -ForegroundColor Green
@@ -26,44 +27,63 @@ function migrateDown {
     migrate -path $migratePath -database $env:POSTGRES_URL -verbose down $steps
 }
 
+function migrateNew {
+    param([string]$name)
+    if (-not $name) {
+        Write-Host "❌ Migration name is required! Use -name <migration_name>" -ForegroundColor Red
+        return
+    }
+    Write-Host "📦 Creating new migration: $name" -ForegroundColor Cyan
+    migrate create -ext sql -dir $migratePath -seq $name
+}
+
 function sqlcGen {
     Write-Host "🛠 Generating SQLC code..." -ForegroundColor Cyan
     sqlc generate -f $sqlcConfig
 }
 
+function goRun {
+    Write-Host "🚀 Running Go application..." -ForegroundColor Green
+    go run ./cmd/api/main.go
+}
+
+function goBuild {
+    Write-Host "🔨 Building Go application..." -ForegroundColor Yellow
+    go build -o bin/app ./cmd/api
+}
+
+function goTest {
+    Write-Host "🧪 Running tests..." -ForegroundColor Cyan
+    go test ./...
+}
+
 # -------------------------
-# Switch command
+# Command dispatcher
 # -------------------------
-switch ($cmd) {
-    "run" {
-        Write-Host "🚀 Running Go application..." -ForegroundColor Green
-        go run ./cmd/api/main.go
-    }
-    "build" {
-        Write-Host "🔨 Building Go application..." -ForegroundColor Yellow
-        go build -o bin/app ./cmd/api
-    }
-    "test" {
-        Write-Host "🧪 Running tests..." -ForegroundColor Cyan
-        go test ./...
-    }
-    "mup" {
-        migrateUp
-    }
-    "mdown" {
-        migrateDown $steps
-    }
-    "sqlc" {
-        sqlcGen
-    }
-    default {
-        Write-Host "❌ Unknown command: $cmd" -ForegroundColor Red
-        Write-Host "Available commands:" -ForegroundColor Yellow
-        Write-Host "  run       -> run application"
-        Write-Host "  build     -> build application"
-        Write-Host "  test      -> run tests"
-        Write-Host "  mup       -> migrate up"
-        Write-Host "  mdown     -> migrate down <steps> (default 1)"
-        Write-Host "  sqlc      -> sqlc generate"
+function dispatch($cmd, $steps, $name) {
+    switch ($cmd) {
+        "run"   { goRun }
+        "build" { goBuild }
+        "test"  { goTest }
+        "mup"   { migrateUp }
+        "mdown" { migrateDown $steps }
+        "mnew"  { migrateNew $name }
+        "sqlc"  { sqlcGen }
+        default {
+            Write-Host "❌ Unknown command: $cmd" -ForegroundColor Red
+            Write-Host "Available commands:" -ForegroundColor Yellow
+            Write-Host "  run       -> run application"
+            Write-Host "  build     -> build application"
+            Write-Host "  test      -> run tests"
+            Write-Host "  mup       -> migrate up"
+            Write-Host "  mdown     -> migrate down <steps> (default 1)"
+            Write-Host "  mnew      -> create new migration <-name required>"
+            Write-Host "  sqlc      -> sqlc generate"
+        }
     }
 }
+
+# -------------------------
+# Run
+# -------------------------
+dispatch $cmd $steps $name

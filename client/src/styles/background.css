@@ -48,6 +48,22 @@
     );
   }
 
+  .bg-gradient-glass-dark {
+    background-image: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+  }
+
+  .bg-gradient-glass {
+    background-image: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
+  }
+
   .bg-primary {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   }

@@ -5,6 +5,11 @@ import { TransactionDetailModalProps } from '@/shared/types/modal-type';
 import { useModalStore } from '@/stores/modal-store';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { Transaction } from '@/features/tx/types/transaction';
+import { SignPayload, SignTransaction } from '@/lib/crypto/wallet.crypto';
+import { toast } from '../globalToaster';
+import { useSendTransactionMutation } from '@/features/tx/hook/useTransactionMutation';
+import { buildSendTransactionSignaturePayload } from '@/features/wallet/helpers/wallet-helper';
 
 const TransactionDetailModal = ({
   balance,
@@ -13,12 +18,62 @@ const TransactionDetailModal = ({
   amount,
   message,
   fee,
+  transaction,
+  privateKey,
+  priority,
 }: TransactionDetailModalProps) => {
   const { actions } = useModalStore();
   const [isLoading, setIsloading] = useState(false);
+  const sendTx = useSendTransactionMutation();
 
-  const onSendTransaction = () => {
+  const onSendTransaction = async () => {
     setIsloading(true);
+
+    const newTx: Transaction = {
+      ID: Buffer.from(transaction.id, 'base64').toString('hex'),
+      Inputs: [],
+      Outputs: [],
+    };
+
+    for (const input of transaction.inputs) {
+      const sig = SignTransaction(privateKey, input.dataToSign);
+      newTx.Inputs.push({
+        ID: Buffer.from(input.id, 'base64').toString('hex'),
+        Out: input.out,
+        Signature: sig,
+        PubKey: Buffer.from(input.pubKey, 'base64').toString('hex'),
+      });
+    }
+
+    for (const output of transaction.outputs) {
+      newTx.Outputs.push({
+        Value: output.Value,
+        PubKeyHash: Buffer.from(output.PubKeyHash, 'base64').toString('hex'),
+      });
+    }
+
+    const dataToSign = buildSendTransactionSignaturePayload({
+      message,
+      priority,
+      transaction: newTx,
+      receiverAddress: to,
+      amount,
+      fee,
+    });
+
+    dataToSign.sig = SignPayload(privateKey, dataToSign.data);
+
+    sendTx.mutate(dataToSign, {
+      onError: (err) => {
+        setIsloading(false);
+        toast.error('Send Transaction Error', err.message);
+      },
+      onSuccess: () => {
+        actions.closeModal();
+        toast.success('Transaction sent successfully!');
+        setIsloading(false);
+      },
+    });
   };
 
   return (

@@ -15,7 +15,7 @@ import (
 func InitRouter() *fiber.App {
 	globalLimiter, err := ratelimiter.NewTokenBucketRateLimiter(ratelimiter.Config{
 		Rate:  1000,
-		Burst: 2000,
+		Burst: 3000,
 	})
 	if err != nil {
 		log.Panicf("Failed to initialize global rate limiter: %v", err)

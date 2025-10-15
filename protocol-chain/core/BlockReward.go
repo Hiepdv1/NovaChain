@@ -9,7 +9,7 @@ const (
 	MAX_HALVING          int64 = 64
 )
 
-func (bc *Blockchain) GetBlockReward(height int64, address string) *Transaction {
+func (bc *Blockchain) GetBlockReward(height int64, address string) (*Transaction, error) {
 	numHalvings := height / HALVING_INTERVAL
 	var rewardBlock float64
 
@@ -28,7 +28,7 @@ func (bc *Blockchain) GetBlockReward(height int64, address string) *Transaction 
 	txIn := TxInput{
 		[]byte{},
 		-1,
-		nil,
+		[]byte{},
 		[]byte{},
 	}
 
@@ -40,8 +40,13 @@ func (bc *Blockchain) GetBlockReward(height int64, address string) *Transaction 
 		Outputs: []TxOutput{*txOut},
 	}
 
-	tx.ID = tx.Hash()
+	txIdHash, err := tx.Hash(height)
+	if err != nil {
+		return nil, err
+	}
 
-	return &tx
+	tx.ID = txIdHash
+
+	return &tx, nil
 
 }

@@ -26,6 +26,13 @@ type SendResponse struct {
 	Error   *err.RPCError
 }
 
+type GetMiningTxsResponse struct {
+	Message string
+	ListTxs []any
+	Count   int64
+	Error   *err.RPCError
+}
+
 type GetBlockResponse struct {
 	Block *blockchain.Block
 	Error *err.RPCError

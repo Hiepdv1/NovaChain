@@ -2,6 +2,7 @@ package jsonrpc
 
 import (
 	"core-blockchain/common/err"
+	blockchain "core-blockchain/core"
 	"encoding/json"
 )
 
@@ -24,11 +25,11 @@ type GetAPIBlockByHeightRangeArgs struct {
 }
 
 type SendTxAPIArgs struct {
-	SendFrom string  `json:"sendFrom"`
-	SendTo   string  `json:"sendTo"`
-	Amount   float64 `json:"amount"`
-	Fee      float64 `json:"fee"`
-	Mine     bool    `json:"mine"`
+	TXS []*blockchain.Transaction `json:"transactions"`
+}
+
+type GetMiningTxsAPIArgs struct {
+	Verbose bool `json:"verbose"`
 }
 
 type GETAPIBlockByHash struct {

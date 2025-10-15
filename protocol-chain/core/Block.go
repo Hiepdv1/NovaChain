@@ -2,8 +2,8 @@ package blockchain
 
 import (
 	"bytes"
-	"core-blockchain/common/utils"
-	"encoding/gob"
+	"context"
+	"crypto/sha256"
 	"fmt"
 	"math/big"
 	"time"
@@ -19,65 +19,105 @@ type Block struct {
 	Nonce        int64          `json:"Nonce"`
 	Height       int64          `json:"Height"`
 	MerkleRoot   []byte         `json:"MerkleRoot"`
-	Difficulty   int64          `json:"Difficulty"`
+	NBits        uint32         `json:"nBits"`
 	TxCount      int64          `json:"TxCount"`
 
 	NChainWork *big.Int `json:"NChainWork"`
 }
 
-func CreateBlock(txs []*Transaction, prevHash []byte, height int64, difficulty int64) *Block {
+func CreateBlock(txs []*Transaction, prevHash []byte, height int64, NBits uint32, ctx context.Context) (*Block, error) {
 	block := &Block{
 		Timestamp:    time.Now().Unix(),
 		PrevHash:     prevHash,
 		Transactions: txs,
-		Difficulty:   difficulty,
+		NBits:        NBits,
 		Height:       height,
 		TxCount:      int64(len(txs)),
 	}
 
 	pow := NewProof(block)
 	start := time.Now()
-	nonce, hash := pow.Run()
+	nonce, hash, err := pow.Run(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	duration := time.Since(start)
 	log.Infof("⛏️  Mined block in %s | Nonce: %d | Hash: %x", duration, nonce, hash)
 
 	block.Hash = hash
+	block.Nonce = *nonce
+
+	merkleRoot, err := block.HashTransactions()
+	if err != nil {
+		return nil, err
+	}
+
+	block.MerkleRoot = merkleRoot
+
+	return block, nil
+}
+
+func (b *Block) Size() (int, error) {
+
+	dataBytes := SerializeBlock(b)
+
+	return len(dataBytes), nil
+}
+
+func Genesis(MinerTx *Transaction) (*Block, error) {
+	block := &Block{
+		Timestamp:    1758441999,
+		PrevHash:     nil,
+		Transactions: []*Transaction{MinerTx},
+		NBits:        0x207fffff,
+		Height:       1,
+		TxCount:      1,
+	}
+
+	pow := NewProof(block)
+	start := time.Now()
+	nonce := int64(1)
+	info, err := pow.InitData(nonce)
+
+	if err != nil {
+		return nil, err
+	}
+
+	hash := sha256.Sum256(info)
+
+	duration := time.Since(start)
+	log.Infof("---> Mined block in %s | Nonce: %d | Hash: %x <---", duration, nonce, hash)
+
+	block.Hash = hash[:]
 	block.Nonce = nonce
-	block.MerkleRoot = block.HashTransactions()
 
-	return block
+	merkleRoot, err := block.HashTransactions()
+	if err != nil {
+		return nil, err
+	}
+
+	block.MerkleRoot = merkleRoot
+
+	return block, nil
 }
 
-func (b *Block) Serialize() []byte {
-	var res bytes.Buffer
-	encoder := gob.NewEncoder(&res)
-	err := encoder.Encode(b)
-	utils.ErrorHandle(err)
-	return res.Bytes()
-}
-
-func (b *Block) Deserialize(data []byte) *Block {
-	var block Block
-	decoder := gob.NewDecoder(bytes.NewReader(data))
-	err := decoder.Decode(&block)
-	utils.ErrorHandle(err)
-	return &block
-}
-
-func Genesis(MinerTx *Transaction) *Block {
-	return CreateBlock([]*Transaction{MinerTx}, []byte{}, 1, 0)
-}
-
-func (b *Block) HashTransactions() []byte {
+func (b *Block) HashTransactions() ([]byte, error) {
 	var txHashes [][]byte
 
 	for _, tx := range b.Transactions {
-		txHashes = append(txHashes, tx.Serializer())
+		serialize := new(bytes.Buffer)
+		SerializeTransaction(tx, serialize)
+
+		txHashes = append(txHashes, serialize.Bytes())
 	}
 
-	tree := NewMerkleTree(txHashes)
+	tree, err := NewMerkleTree(txHashes)
+	if err != nil {
+		return nil, err
+	}
 
-	return tree.RootNode.Data
+	return tree.RootNode.Data, nil
 }
 
 func (b *Block) IsBlockValid(oldBlock Block) bool {
@@ -96,12 +136,13 @@ func (b *Block) IsBlockValid(oldBlock Block) bool {
 		return false
 	}
 
-	if b.Difficulty < MinDifficulty {
-		log.Warning("Difficulty too low")
+	merkleRoot, err := b.HashTransactions()
+	if err != nil {
+		log.Error(err)
 		return false
 	}
 
-	if !bytes.Equal(b.MerkleRoot, b.HashTransactions()) {
+	if !bytes.Equal(b.MerkleRoot, merkleRoot) {
 		log.Warning("Merkle root not match")
 		return false
 	}
@@ -125,8 +166,6 @@ func ConstructJSON(buffer *bytes.Buffer, b *Block) {
 	buffer.WriteString(fmt.Sprintf("\"%s\":\"%x\",", "PrevHash", b.PrevHash))
 
 	buffer.WriteString(fmt.Sprintf("\"%s\":\"%x\",", "Hash", b.Hash))
-
-	buffer.WriteString(fmt.Sprintf("\"%s\":%d,", "Difficulty", b.Difficulty))
 
 	buffer.WriteString(fmt.Sprintf("\"%s\":%d,", "Nonce", b.Nonce))
 

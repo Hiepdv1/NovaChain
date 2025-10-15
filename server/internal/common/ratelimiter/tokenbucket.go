@@ -30,6 +30,7 @@ type BucketState struct {
 }
 
 func NewTokenBucketRateLimiter(cfg Config) (*TokenBucketRateLimiter, error) {
+
 	if cfg.Rate <= 0 {
 		return nil, apperror.BadRequest("Rate must be positive", nil)
 	}
@@ -42,7 +43,8 @@ func NewTokenBucketRateLimiter(cfg Config) (*TokenBucketRateLimiter, error) {
 
 	if clientRedis.Client == nil {
 		clientMu.RUnlock()
-		return nil, apperror.Internal("Redis client not initialized", nil)
+		log.Error("Redis client not initialized")
+		return nil, apperror.Internal("Something went wrong, please try again", nil)
 	}
 
 	clientMu.RUnlock()
@@ -67,7 +69,7 @@ func (rl *TokenBucketRateLimiter) Allow(ctx context.Context, key clientRedis.Cac
 		}
 	} else if err != nil {
 		log.Errorf("Token bucket: Failed to get state for key %s: %v", key.String(), err)
-		return false, Result{}, apperror.Internal("failed to get state", err)
+		return false, Result{}, apperror.Internal("Something went wrong, please try again.", nil)
 	}
 
 	now := time.Now()
@@ -85,7 +87,7 @@ func (rl *TokenBucketRateLimiter) Allow(ctx context.Context, key clientRedis.Cac
 	err = clientRedis.Set(ctx, key, state, time.Minute)
 	if err != nil {
 		log.Errorf("Token bucket: Failed to set state for key %s: %v", key.String(), err)
-		return false, Result{}, apperror.Internal("Failed to set state", err)
+		return false, Result{}, apperror.Internal("Something went wrong, please try again.", nil)
 	}
 
 	return true, Result{Remaining: int(state.Tokens)}, nil
@@ -111,7 +113,8 @@ func (rl *TokenBucketRateLimiter) SetConfig(ctx context.Context, key clientRedis
 	if err == redis.Nil {
 		return nil
 	} else if err != nil {
-		return apperror.Internal("failed to get state", err)
+		log.Errorf("Token bucket: Failed to set state for key %s: %v", key.String(), err)
+		return apperror.Internal("Something went wrong, please try again.", nil)
 	}
 
 	state.Tokens = math.Min(float64(rl.burst), state.Tokens)

@@ -3,7 +3,6 @@ package blockchain
 import (
 	"bytes"
 	"core-blockchain/common/env"
-	"core-blockchain/common/utils"
 	"core-blockchain/wallet"
 	"encoding/gob"
 )
@@ -49,27 +48,31 @@ func (out *TxOutput) IsLockWithKey(pubKeyHash []byte) bool {
 	return bytes.Equal(out.PubKeyHash, pubKeyHash)
 }
 
-func (outs *TxOutputs) Serialize() []byte {
+func (outs *TxOutputs) Serialize() ([]byte, error) {
 	var res bytes.Buffer
 
 	encoder := gob.NewEncoder(&res)
 
 	err := encoder.Encode(outs)
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return res.Bytes()
+	return res.Bytes(), nil
 
 }
 
-func DeSerializeOuputs(data []byte) TxOutputs {
+func DeSerializeOuputs(data []byte) (*TxOutputs, error) {
 	var outputs TxOutputs
 
 	encoder := gob.NewDecoder(bytes.NewReader(data))
 
 	err := encoder.Decode(&outputs)
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return outputs
+	return &outputs, nil
 }

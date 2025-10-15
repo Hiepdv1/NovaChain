@@ -2,14 +2,14 @@ package blockchain
 
 import (
 	"bytes"
-	"core-blockchain/common/utils"
 	"core-blockchain/wallet"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/gob"
+	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -24,7 +24,7 @@ type Transaction struct {
 	Outputs []TxOutput
 }
 
-func NewTransaction(w *wallet.Wallet, to string, amount, fee float64, utxo *UTXOSet) (*Transaction, error) {
+func NewTransaction(w *wallet.Wallet, to string, amount, fee float64, utxo *UTXOSet, height int64) (*Transaction, error) {
 	if fee < float64(1/PER_COIN) {
 		return nil, fmt.Errorf("fee must be greater than or equal 1/%d (%f)", PER_COIN, float64(1/PER_COIN))
 	}
@@ -34,8 +34,10 @@ func NewTransaction(w *wallet.Wallet, to string, amount, fee float64, utxo *UTXO
 
 	publicKeyHash := wallet.PublicKeyHash(w.PublicKey)
 
-	acc, validOutputs := utxo.FindSpendableOutputs(publicKeyHash, amount+fee)
-
+	acc, validOutputs, err := utxo.FindSpendableOutputs(publicKeyHash, amount+fee)
+	if err != nil {
+		return nil, err
+	}
 	if acc < amount+fee {
 		err := errors.New("you dont have enough amount")
 		return nil, err
@@ -46,7 +48,9 @@ func NewTransaction(w *wallet.Wallet, to string, amount, fee float64, utxo *UTXO
 	for txId, outs := range validOutputs {
 		txID, err := hex.DecodeString(txId)
 
-		utils.ErrorHandle(err)
+		if err != nil {
+			return nil, err
+		}
 
 		for _, out := range outs {
 			input := TxInput{txID, int64(out), nil, w.PublicKey}
@@ -61,54 +65,42 @@ func NewTransaction(w *wallet.Wallet, to string, amount, fee float64, utxo *UTXO
 	}
 
 	tx := Transaction{nil, inputs, outputs}
-	tx.ID = tx.Hash()
+	txIdhash, err := tx.Hash(height)
+
+	if err != nil {
+		return nil, err
+	}
+
+	tx.ID = txIdhash
 
 	utxo.Blockchain.SignTransaction(w.PrivateKey, &tx)
 
 	return &tx, nil
 }
 
-func (tx *Transaction) Serializer() []byte {
-	var encoded bytes.Buffer
-
-	encoder := gob.NewEncoder(&encoded)
-
-	err := encoder.Encode(tx)
-
-	utils.ErrorHandle(err)
-
-	return encoded.Bytes()
-}
-
-func (tx *Transaction) Deserialize(data []byte) *Transaction {
-	var transaction Transaction
-
-	dec := gob.NewDecoder(bytes.NewReader(data))
-	err := dec.Decode(&transaction)
-	utils.ErrorHandle(err)
-
-	return &transaction
-
-}
-
-func (tx *Transaction) Hash() []byte {
+func (tx *Transaction) Hash(height int64) ([]byte, error) {
 	var hash [32]byte
+	buf := new(bytes.Buffer)
 
 	txCopy := *tx
-	txCopy.ID = []byte{}
+	txCopy.ID = nil
 
-	hash = sha256.Sum256(txCopy.Serializer())
+	SerializeTransaction(&txCopy, buf)
 
-	return hash[:]
+	binary.Write(buf, binary.LittleEndian, height)
+
+	hash = sha256.Sum256(buf.Bytes())
+
+	return hash[:], nil
 }
 
 func (tx *Transaction) IsMinerTx() bool {
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
 }
 
-func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
+func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) error {
 	if tx.IsMinerTx() {
-		return
+		return nil
 	}
 
 	for _, in := range tx.Inputs {
@@ -125,16 +117,57 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		txCopy.Inputs[inId].Signature = nil
 		txCopy.Inputs[inId].PubKey = prevTX.Outputs[in.Out].PubKeyHash
 
-		dataToSign := fmt.Sprintf("%x\n", txCopy)
+		dataBytes, err := json.Marshal(txCopy)
+		if err != nil {
+			return err
+		}
 
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
-		utils.ErrorHandle(err)
+		dataToSign := fmt.Sprintf("%x", dataBytes)
+
+		digest := DoubleSHA256([]byte(dataToSign))
+
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, digest)
+
+		if err != nil {
+			return err
+		}
 		signature := append(r.Bytes(), s.Bytes()...)
 
 		tx.Inputs[inId].Signature = signature
 		txCopy.Inputs[inId].PubKey = nil
 	}
 
+	return nil
+}
+
+func (tx *Transaction) BalanceCheck(prevTXs map[string]Transaction) bool {
+	var totalInput float64 = 0
+	var totalOutput float64 = 0
+
+	for _, in := range tx.Inputs {
+		txID := hex.EncodeToString(in.ID)
+		prevTx, ok := prevTXs[txID]
+		if !ok {
+			return false
+		}
+
+		if in.Out < 0 || in.Out >= int64(len(prevTx.Outputs)) {
+			return false
+		}
+
+		pubKeyHash := wallet.PublicKeyHash(in.PubKey)
+		if !bytes.Equal(pubKeyHash, prevTx.Outputs[in.Out].PubKeyHash) {
+			return false
+		}
+
+		totalInput += prevTx.Outputs[in.Out].Value
+	}
+
+	for _, out := range tx.Outputs {
+		totalOutput += out.Value
+	}
+
+	return totalInput >= totalOutput
 }
 
 func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
@@ -144,8 +177,13 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 
 	for _, in := range tx.Inputs {
 		if prevTXs[hex.EncodeToString(in.ID)].ID == nil {
-			log.Fatal("ERROR: Previous Transaction is not valid")
+			log.Error("ERROR: Previous Transaction is not valid")
+			return false
 		}
+	}
+
+	if !tx.BalanceCheck(prevTXs) {
+		return false
 	}
 
 	txCopy := tx.TrimmedCopy()
@@ -155,7 +193,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		prevTX := prevTXs[hex.EncodeToString(in.ID)]
 
 		txCopy.Inputs[inId].Signature = nil
-		txCopy.Inputs[inId].PubKey = prevTX.Outputs[inId].PubKeyHash
+		txCopy.Inputs[inId].PubKey = prevTX.Outputs[in.Out].PubKeyHash
 
 		r := big.Int{}
 		s := big.Int{}
@@ -169,16 +207,22 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		x.SetBytes(in.PubKey[:(keyLen / 2)])
 		y.SetBytes(in.PubKey[(keyLen / 2):])
 
-		dataToVerify := fmt.Sprintf("%x\n", txCopy)
+		dataByte, err := json.Marshal(txCopy)
+		if err != nil {
+			log.Errorf("Failed to JSON marshal transaction: %v", err)
+			return false
+		}
+		dataToVerify := fmt.Sprintf("%x", dataByte)
+
+		digest := DoubleSHA256([]byte(dataToVerify))
 
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
 
-		if !ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) {
+		if !ecdsa.Verify(&rawPubKey, digest, &r, &s) {
 			return false
 		}
 
 		txCopy.Inputs[inId].PubKey = nil
-
 	}
 
 	return true
@@ -236,7 +280,7 @@ func (tx *Transaction) String() string {
 	return strings.Join(lines, "\n")
 }
 
-func InitGenesisTx() *Transaction {
+func InitGenesisTx(height int64) (*Transaction, error) {
 
 	pubkey, err := hex.DecodeString("5d5807642aea55229a534a596b0b98c76346abccf85c83d17e7e80cfc9eef4682c85ff581cc4ca8d26244e9d3d9ed0695241c76ac288bb3a9b3b7802da0db4b7")
 
@@ -247,7 +291,7 @@ func InitGenesisTx() *Transaction {
 	txIn := TxInput{
 		ID:        []byte{},
 		Out:       -1,
-		Signature: nil,
+		Signature: []byte{},
 		PubKey:    pubkey,
 	}
 	txOut := NewTxOutput(111_111_111.965185, "1LacjauKAjDJA34hjS9xJ2uEez7pQYqh5N")
@@ -258,7 +302,12 @@ func InitGenesisTx() *Transaction {
 		Outputs: []TxOutput{*txOut},
 	}
 
-	tx.ID = tx.Hash()
+	txIdHash, err := tx.Hash(height)
+	if err != nil {
+		return nil, err
+	}
 
-	return &tx
+	tx.ID = txIdHash
+
+	return &tx, nil
 }

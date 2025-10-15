@@ -38,3 +38,7 @@ SELECT * FROM utxos
 WHERE pub_key_hash = $1
 ORDER BY value DESC;
 
+-- name: GetUTXOByTxIDAndOut :one
+SELECT * FROM utxos
+WHERE tx_id = $1 AND output_index = $2
+LIMIT 1;

@@ -2,7 +2,6 @@ package wallet
 
 import (
 	"bytes"
-	"core-blockchain/common/utils"
 	"crypto/elliptic"
 	"encoding/gob"
 	"errors"
@@ -12,6 +11,8 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -146,7 +147,10 @@ func (wp *WalletPool) SaveFile(cwd bool) {
 
 	if cwd {
 		dir, err := os.Getwd()
-		utils.ErrorHandle(err)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 		walletFile = path.Join(dir, walletFileName)
 	}
 
@@ -159,14 +163,23 @@ func (wp *WalletPool) SaveFile(cwd bool) {
 
 	for addr, wallet := range wp.Wallets {
 		w, err := wallet.Serialize()
-		utils.ErrorHandle(err)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 		walletPool.Wallets[addr] = w
 	}
 
 	encoder := gob.NewEncoder(&content)
 	err := encoder.Encode(&walletPool)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	err = os.WriteFile(walletFile, content.Bytes(), 0644)
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 }

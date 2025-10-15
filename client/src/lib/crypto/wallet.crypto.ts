@@ -111,10 +111,31 @@ export const DecryptedPrivateKeyFromExport = (
 };
 
 export const SignPayload = (privateHex: string, data: any): string => {
-  const dataStr = JSON.stringify(data);
+  let dataStr = null;
+  if (typeof data === 'string') {
+    dataStr = data;
+  } else {
+    dataStr = JSON.stringify(data);
+  }
+
   const hashBuffer = crypto.createHash('sha256').update(dataStr).digest();
   const key = ec.keyFromPrivate(privateHex, 'hex');
   const sig = key.sign(hashBuffer);
+
+  const r = sig.r.toArray('be', 32);
+  const s = sig.s.toArray('be', 32);
+
+  return Buffer.concat([Buffer.from(r), Buffer.from(s)]).toString('hex');
+};
+
+export const SignTransaction = (
+  privateHex: string,
+  dataHex: string,
+): string => {
+  const dataToSign = Buffer.from(dataHex, 'hex');
+
+  const key = ec.keyFromPrivate(privateHex, 'hex');
+  const sig = key.sign(dataToSign);
 
   const r = sig.r.toArray('be', 32);
   const s = sig.s.toArray('be', 32);

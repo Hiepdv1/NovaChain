@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 
 	"github.com/dgraph-io/badger"
@@ -18,17 +19,11 @@ var (
 
 const (
 	ChainPrefix   = "chain-"
-	MaxForkLength = 6
+	MaxForkLength = 3
 )
 
 func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction)) error {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	currentTip, err := bc.GetLastBlock()
-	if err != nil {
-		return fmt.Errorf("failed to get last block: %w", err)
-	}
+	log.Infof("Reorg started: candidate block %x at height %d", newBlock.Hash, newBlock.Height)
 
 	newChain := make([]*Block, 0)
 	newHash := newBlock.PrevHash
@@ -38,7 +33,7 @@ func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction))
 	for len(newHash) > 0 && newHeight > 0 {
 		block, err := bc.GetBlock(newHash)
 		if err != nil {
-			return (fmt.Errorf("failed to get block %x in new chain: %w", newHash, err))
+			return fmt.Errorf("failed to get block %x in new chain: %w", newHash, err)
 		}
 		newChain = append(newChain, &block)
 		newHash = block.PrevHash
@@ -48,6 +43,13 @@ func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction))
 			break
 		}
 	}
+	log.Infof("Reorg: collected %d blocks in new chain (maxFork=%d)", len(newChain), MaxForkLength)
+
+	currentTip, err := bc.GetLastBlock()
+	if err != nil {
+		return fmt.Errorf("failed to get last block: %w", err)
+	}
+	log.Infof("Reorg: current tip %x at height %d", currentTip.Hash, currentTip.Height)
 
 	currentHash := currentTip.Hash
 	currentHeight := currentTip.Height
@@ -57,7 +59,7 @@ func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction))
 	for len(currentHash) > 0 && currentHeight > 0 {
 		block, err := bc.GetBlock(currentHash)
 		if err != nil {
-			return (fmt.Errorf("failed to get block %x in old chain: %w", currentHash, err))
+			return fmt.Errorf("failed to get block %x in old chain: %w", currentHash, err)
 		}
 		oldChain = append(oldChain, &block)
 		currentHash = block.PrevHash
@@ -67,30 +69,36 @@ func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction))
 			break
 		}
 	}
+	log.Infof("Reorg: collected %d blocks in old chain (maxFork=%d)", len(oldChain), MaxForkLength)
 
-	var forkHeight int64 = 0
-	var forkHash []byte
+	var commonAncestorHeight int64 = 0
+	var commonAncestorHash []byte
 	for _, newBlock := range newChain {
 		for _, oldBlock := range oldChain {
 			if newBlock.Height == oldBlock.Height && bytes.Equal(newBlock.Hash, oldBlock.Hash) {
-				forkHeight = newBlock.Height
-				forkHash = newBlock.Hash
+				commonAncestorHeight = newBlock.Height
+				commonAncestorHash = newBlock.Hash
+				log.Infof("Reorg: found common ancestor at height %d hash=%x", commonAncestorHeight, commonAncestorHash)
+				break
 			}
 		}
-
-		if len(forkHash) > 0 {
+		if len(commonAncestorHash) > 0 {
 			break
 		}
 	}
 
-	if forkHeight == 0 && len(forkHash) == 0 {
-		return errors.New("no common ancestor found or Reorg too deep")
+	if commonAncestorHeight == 0 {
+		return errors.New("reorg failed: no common ancestor found or fork too deep")
 	}
 
 	var memoryPool []*Transaction
-	UTXOs := bc.FindUTXO()
+	UTXOs, err := bc.FindUTXO()
+	if err != nil {
+		return err
+	}
+
 	for _, oldBlock := range oldChain {
-		if oldBlock.Height < forkHeight {
+		if oldBlock.Height <= commonAncestorHeight {
 			continue
 		}
 		for _, tx := range oldBlock.Transactions {
@@ -100,125 +108,116 @@ func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction))
 			txID := hex.EncodeToString(tx.ID)
 			if _, exists := UTXOs[txID]; !exists {
 				memoryPool = append(memoryPool, tx)
-				log.Infof("Reorg: Transaction %s returned to memopool", txID)
+				log.Infof("Reorg: rollback tx %s to mempool", txID)
 			}
 		}
 	}
 
-	for _, newBlock := range newChain {
-		if newBlock.Height < forkHeight {
+	for _, nb := range newChain {
+		if nb.Height <= commonAncestorHeight {
 			continue
 		}
-
-		for _, tx := range newBlock.Transactions {
+		for _, tx := range nb.Transactions {
 			for ix, memoTx := range memoryPool {
 				if bytes.Equal(tx.ID, memoTx.ID) {
 					memoryPool = append(memoryPool[:ix], memoryPool[ix+1:]...)
+					log.Infof("Reorg: tx %x already in new chain, removed from mempool rollback list", tx.ID)
 				}
 			}
 		}
 	}
 
-	go callback(memoryPool)
+	if len(memoryPool) > 0 {
+		callback(memoryPool)
+		txIds := make([]string, 0)
+		for _, tx := range memoryPool {
+			txIds = append(txIds, hex.EncodeToString(tx.ID))
+		}
+		log.Warnf("Reorg: rollback %d txs from old chain:\n%s", len(memoryPool), strings.Join(txIds, "\n"))
+	}
 
 	err = bc.Database.Update(func(txn *badger.Txn) error {
-		log.Warningf("REORGNIZATION: New best chain found ! Tips: %x Height: %d", newBlock.Hash, newBlock.Height)
+		log.Warnf("Reorg: switching to new best chain, new tip %x at height %d", newBlock.Hash, newBlock.Height)
 
-		err := txn.Set([]byte(BestHeightPrefix), newBlock.Hash)
-		if err != nil {
+		if err := txn.Set([]byte(BestHeightPrefix), newBlock.Hash); err != nil {
 			return fmt.Errorf("failed to set best height: %w", err)
 		}
 		bc.LastHash = newBlock.Hash
 
 		keyCheckpoint := fmt.Sprintf("%s%d", CheckpointPrefix, newBlock.Height)
-		err = txn.Set([]byte(keyCheckpoint), newBlock.Hash)
-		if err != nil {
-			return fmt.Errorf("failed to set best height: %w", err)
+		if err := txn.Set([]byte(keyCheckpoint), newBlock.Hash); err != nil {
+			return fmt.Errorf("failed to set checkpoint: %w", err)
 		}
 
-		err = txn.Set(newBlock.Hash, newBlock.Serialize())
+		serialize := SerializeBlock(newBlock)
 
-		return err
+		if err := txn.Set(newBlock.Hash, serialize); err != nil {
+			return fmt.Errorf("failed to persist new block: %w", err)
+		}
+		return nil
 	})
+
+	if err == nil {
+		bc.LastHash = newBlock.Hash
+		log.Infof("Reorg finished successfully: new tip %x height=%d", newBlock.Hash, newBlock.Height)
+	}
 
 	return err
 }
 
-func (bc *Blockchain) GetTotalWork(block *Block) (*big.Int, error) {
-
-	prevBlock, err := bc.GetBlock(block.PrevHash)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get block %x during total work calculation: %w", block.Hash, err)
-	}
-
-	if !bc.IsBlockValid(prevBlock) {
-		return nil, fmt.Errorf("block %x not valid", block.Hash)
-	}
-
-	totalWork := big.NewInt(0)
-	totalWork = totalWork.Add(totalWork, block.NChainWork)
-
-	currentWork := big.NewInt(0)
-	currentWork = currentWork.Lsh(big.NewInt(1), uint(block.Difficulty))
-
-	currentWork = currentWork.Div(big.NewInt(2).Lsh(big.NewInt(2), 256), currentWork.Add(currentWork, big.NewInt(1)))
-
-	totalWork = totalWork.Add(totalWork, currentWork)
-
-	return totalWork, nil
-
+func (bc *Blockchain) CalcWork(nBits uint32) *big.Int {
+	target := CompactToBig(nBits)
+	denominator := new(big.Int).Add(target, big.NewInt(1))
+	return new(big.Int).Div(
+		new(big.Int).Lsh(big.NewInt(1), 256),
+		denominator,
+	)
 }
 
 func (bc *Blockchain) AddBlock(block *Block, callback func([]*Transaction)) error {
 	mutex.Lock()
 	defer mutex.Unlock()
+
 	if !bc.IsBlockValid(*block) {
-		return fmt.Errorf("block %x not valid", block.Hash)
+		return fmt.Errorf("ADD BLOCK: invalid block %x", block.Hash)
 	}
 
 	currentTipBlock, err := bc.GetLastBlock()
 	if err != nil {
-		return fmt.Errorf("failed to get last block: %w", err)
+		return fmt.Errorf("ADD BLOCK: failed to get current tip: %w", err)
 	}
 
-	mainChainWork, err := bc.GetTotalWork(currentTipBlock)
-
+	prevBlock, err := bc.GetBlock(block.PrevHash)
 	if err != nil {
-		return fmt.Errorf("failed to calculate work for main chain: %v", err)
+		return fmt.Errorf("ADD BLOCK: failed to get previous block %x: %w", block.PrevHash, err)
 	}
 
-	newChainWork, err := bc.GetTotalWork(block)
-
-	if err != nil {
-		return fmt.Errorf("failed to calculate work for new chain: %v", err)
-	}
-
+	newChainWork := bc.CalcWork(block.NBits)
+	newChainWork = new(big.Int).Add(prevBlock.NChainWork, newChainWork)
 	block.NChainWork = newChainWork
 
-	log.Infof("Comparing chains: Main chain work = %s, New chain work = %s", mainChainWork.String(), newChainWork.String())
-	if newChainWork.Cmp(mainChainWork) > 0 {
-		err := bc.Reorganize(block, callback)
-		if err != nil {
-			return err
+	log.Infof("ADD BLOCK: received block %x (height=%d). Current tip work=%s, new block chain work=%s",
+		block.Hash, block.Height, currentTipBlock.NChainWork.String(), newChainWork.String(),
+	)
+
+	if newChainWork.Cmp(currentTipBlock.NChainWork) > 0 {
+		log.Infof("ADD BLOCK: block %x extends a stronger chain → starting reorganization", block.Hash)
+		if err := bc.Reorganize(block, callback); err != nil {
+			return fmt.Errorf("ADD BLOCK: reorganization failed for block %x: %w", block.Hash, err)
 		}
 	} else {
+		log.Infof("ADD BLOCK: block %x stored as disconnected (weaker chain)", block.Hash)
 		err := bc.Database.Update(func(txn *badger.Txn) error {
-			log.Info("UPDATE NEW BLOCK DISCONNECTED")
-
 			keyCheckpoint := fmt.Sprint(CheckpointPrefix, block.Height)
-			err = txn.Set([]byte(keyCheckpoint), block.Hash)
-			if err != nil {
+			if err := txn.Set([]byte(keyCheckpoint), block.Hash); err != nil {
 				return err
 			}
-
-			err = txn.Set(block.Hash, block.Serialize())
-
-			return err
+			serialize := SerializeBlock(block)
+			return txn.Set(block.Hash, serialize)
 		})
 
 		if err != nil {
-			return fmt.Errorf("failed to update database with new block %x: %v", block.Hash, err)
+			return fmt.Errorf("ADD BLOCK: failed to save disconnected block %x: %v", block.Hash, err)
 		}
 	}
 

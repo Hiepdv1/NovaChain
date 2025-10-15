@@ -3,6 +3,7 @@ package router
 import (
 	"ChainServer/internal/app/module/applog"
 	"ChainServer/internal/app/module/chain"
+	"ChainServer/internal/app/module/dashboard"
 	"ChainServer/internal/app/module/transaction"
 	"ChainServer/internal/app/module/utxo"
 	"ChainServer/internal/app/module/wallet"
@@ -33,6 +34,11 @@ func GetAllModuleRouters() []ModuleRouter {
 		utxo.NewUTXORoutes(
 			utxo.NewRPCUtxoRepository(),
 			utxo.NewDbUTXORepository(),
+		),
+
+		dashboard.NewDashboardRoutes(
+			chain.NewDBChainRepository(),
+			transaction.NewDbTransactionRepository(),
 		),
 	}
 }

@@ -21,6 +21,7 @@ func (api *API) registerHandlers() {
 	handlers = map[string]HandleFunc{
 		"API.GetAllUTXOs":           api.GetAllUTXOs,
 		"API.SendTx":                api.HandleSendTx,
+		"API.GetMiningTxs":          api.GetMiningTxs,
 		"API.GetBlock":              api.GetBlockByHash,
 		"API.GetBalance":            api.HandleGetBalance,
 		"API.CreateWallet":          api.HandleCreateWallet,

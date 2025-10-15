@@ -29,12 +29,17 @@ func (r *WalletRoutes) InitRoutes(router fiber.Router) {
 
 func (r *WalletRoutes) RegisterPublic(router fiber.Router) {
 	publicGroup := r.walletGroup.Group("/__pub",
-		middlewares.ValidateBody[dto.WalletRequest](),
+		middlewares.DecryptBodyMiddleware(nil),
+		middlewares.ValidateBody[dto.WalletRequest](false),
 		middlewares.VerifyWalletSignature,
 	)
 
-	publicGroup.Post("/new", r.handler.CreateWallet)
-	publicGroup.Post("/import", r.handler.ImportWallet)
+	publicGroup.Post("/new",
+		r.handler.CreateWallet,
+	)
+	publicGroup.Post("/import",
+		r.handler.ImportWallet,
+	)
 
 }
 

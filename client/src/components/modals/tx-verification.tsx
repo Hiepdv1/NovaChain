@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useModalStore } from '@/stores/modal-store';
@@ -13,8 +12,8 @@ import {
 } from '@/lib/crypto/wallet.crypto';
 import useWalletContext from '../providers/wallet-provider';
 import { useTransactionCreate } from '@/features/tx/hook/useTransactionMutation';
-import { buildSignatureCreateTx } from '@/features/wallet/helpers/wallet-helper';
 import { VeriftTxModalProps } from '@/shared/types/modal-type';
+import { buildTransactionSignaturePayload } from '@/features/wallet/helpers/wallet-helper';
 
 const VerifyTransaction = ({
   onSubmit: onConfirmPassword,
@@ -102,13 +101,13 @@ const VerifyTransaction = ({
       setStatus({ valid: true, message: '' });
     }
 
-    const payload = buildSignatureCreateTx(
+    const payload = buildTransactionSignaturePayload(
       txData.to,
       txData.fee,
       txData.amount,
       Math.floor(Date.now() / 1000),
-      wallet.pubkey,
       txData.message,
+      txData.priority,
     );
 
     payload.sig = SignPayload(privateKey, payload.data);
@@ -203,7 +202,7 @@ const VerifyTransaction = ({
 
                   <div className="glass-card rounded-lg p-3 border border-white/10">
                     <p className="text-xs break-all text-black">
-                      {wallet.data.Address}
+                      {wallet.data.Address.String}
                     </p>
                   </div>
 

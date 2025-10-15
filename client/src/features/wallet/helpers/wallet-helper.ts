@@ -1,9 +1,13 @@
 import { GetAddress, GetPublicKeyFromPrivateKey } from '@/lib/db/wallet.store';
 import { WalletSignaturePayload } from '../types/wallet';
 import { v4 as genuid } from 'uuid';
-import { CreateNewTXPayload } from '@/features/tx/types/transaction';
+import {
+  CreateNewTXPayload,
+  SendTransactionData,
+  SendTransactionPayload,
+} from '@/features/tx/types/transaction';
 
-export const buildSignatureWallet = (
+export const buildWalletSignaturePayload = (
   privateKey: string,
 ): WalletSignaturePayload => {
   const publickey = GetPublicKeyFromPrivateKey(privateKey);
@@ -17,13 +21,13 @@ export const buildSignatureWallet = (
   };
 };
 
-export const buildSignatureCreateTx = (
+export const buildTransactionSignaturePayload = (
   to: string,
   fee: number,
   amount: number,
   timestamp: number,
-  pubKey: string,
   message: string,
+  priority: number,
 ): CreateNewTXPayload => {
   return {
     data: {
@@ -32,8 +36,24 @@ export const buildSignatureCreateTx = (
       to,
       timestamp: timestamp + 3 * 60,
       message,
+      priority,
     },
-    pubKey,
+    sig: '',
+  };
+};
+
+export const buildSendTransactionSignaturePayload = (
+  payload: SendTransactionData,
+): SendTransactionPayload => {
+  return {
+    data: {
+      amount: payload.amount,
+      fee: payload.fee,
+      message: payload.message,
+      receiverAddress: payload.receiverAddress,
+      priority: payload.priority,
+      transaction: payload.transaction,
+    },
     sig: '',
   };
 };

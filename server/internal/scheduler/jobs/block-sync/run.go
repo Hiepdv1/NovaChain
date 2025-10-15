@@ -11,7 +11,7 @@ import (
 func Run() {
 
 	blockSync := NewJobBlockSync(
-		time.Minute,
+		5*time.Second,
 		chain.NewDBChainRepository(),
 		transaction.NewDbTransactionRepository(),
 		chain.NewRPCChainRepository(),

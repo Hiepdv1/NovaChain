@@ -2,7 +2,7 @@ package blockchain
 
 import (
 	"crypto/sha256"
-	"log"
+	"fmt"
 )
 
 type MerkeTree struct {
@@ -34,7 +34,7 @@ func NewMerkleNode(left, right *MerkleNode, data []byte) *MerkleNode {
 
 }
 
-func NewMerkleTree(data [][]byte) *MerkeTree {
+func NewMerkleTree(data [][]byte) (*MerkeTree, error) {
 	var nodes []MerkleNode
 
 	for _, d := range data {
@@ -43,7 +43,7 @@ func NewMerkleTree(data [][]byte) *MerkeTree {
 	}
 
 	if len(nodes) == 0 {
-		log.Panic("No merkle tree node.")
+		return nil, fmt.Errorf("%s", "No merkle tree node.")
 	}
 
 	for len(nodes) > 1 {
@@ -64,5 +64,5 @@ func NewMerkleTree(data [][]byte) *MerkeTree {
 
 	tree := &MerkeTree{&nodes[0]}
 
-	return tree
+	return tree, nil
 }

@@ -2,7 +2,7 @@ package blockchain
 
 import (
 	"bytes"
-	"core-blockchain/common/utils"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"math"
@@ -17,36 +17,43 @@ type ProofOfWork struct {
 }
 
 func NewProof(b *Block) *ProofOfWork {
-	target := big.NewInt(1)
-	target.Lsh(target, uint(256-b.Difficulty))
+	target := CompactToBig(b.NBits)
 
 	pow := &ProofOfWork{b, target}
 
 	log.Infof("Target: %x\n", target)
-	log.Infof("Difficulty: %x\n", b.Difficulty)
+	log.Infof("NBits: %d\n", b.NBits)
 
 	return pow
 }
 
-func (pow *ProofOfWork) InitData(nonce int64) []byte {
+func (pow *ProofOfWork) InitData(nonce int64) ([]byte, error) {
+	hashTx, err := pow.Block.HashTransactions()
+	if err != nil {
+		return nil, err
+	}
+
 	info := bytes.Join([][]byte{
-		pow.Block.HashTransactions(),
+		hashTx,
 		pow.Block.PrevHash,
 		ToByte(int64(nonce)),
-		ToByte(int64(pow.Block.Difficulty)),
+		ToByte(int64(pow.Block.NBits)),
 		ToByte(pow.Block.Height),
 		ToByte(pow.Block.Timestamp),
 		ToByte(pow.Block.TxCount),
 	}, []byte{})
 
-	return info
+	return info, nil
 }
 
 func (pow *ProofOfWork) Validate() bool {
 	var initHash big.Int
 	var hash [32]byte
 
-	info := pow.InitData(pow.Block.Nonce)
+	info, err := pow.InitData(pow.Block.Nonce)
+	if err != nil {
+		return false
+	}
 	hash = sha256.Sum256(info)
 
 	initHash.SetBytes(hash[:])
@@ -55,25 +62,33 @@ func (pow *ProofOfWork) Validate() bool {
 
 }
 
-func (pow *ProofOfWork) Run() (int64, []byte) {
+func (pow *ProofOfWork) Run(ctx context.Context) (*int64, []byte, error) {
 	var initHash big.Int
 	var hash [32]byte
 	var nonce int64
 
 	for nonce = range math.MaxInt64 {
-		info := pow.InitData(nonce)
-		hash = sha256.Sum256(info)
+		select {
+		case <-ctx.Done():
+			return nil, nil, nil
+		default:
+			info, err := pow.InitData(nonce)
+			if err != nil {
+				return nil, nil, err
+			}
+			hash = sha256.Sum256(info)
 
-		log.Infof("Pow: \r%x", hash)
-		initHash.SetBytes(hash[:])
+			log.Infof("Pow: \r%x", hash)
+			initHash.SetBytes(hash[:])
 
-		if initHash.Cmp(pow.Target) == -1 {
-			log.Infoln("---------------- Found! ----------------")
-			break
+			if initHash.Cmp(pow.Target) == -1 {
+				log.Infoln("---------------- Found! ----------------")
+				return &nonce, hash[:], err
+			}
 		}
 	}
 
-	return nonce, hash[:]
+	return nil, nil, nil
 }
 
 func ToByte(num int64) []byte {
@@ -81,7 +96,10 @@ func ToByte(num int64) []byte {
 
 	err := binary.Write(buff, binary.BigEndian, num)
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
 
 	return buff.Bytes()
 }

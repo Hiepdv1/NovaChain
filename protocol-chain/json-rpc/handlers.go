@@ -17,9 +17,13 @@ type API struct {
 var handlers = map[string]HandleFunc{}
 
 func (api *API) HandleCreateWallet(params json.RawMessage) (any, *err.RPCError) {
-	log.Info("HandleCreateWallet Executed...")
 
-	return api.cmd.CreateWallet(), nil
+	wallet, e := api.cmd.CreateWallet()
+	if e != nil {
+		return nil, err.ErrInternal("Internal Error")
+	}
+
+	return wallet, nil
 }
 
 func (api *API) HandleGetBalance(params json.RawMessage) (any, *err.RPCError) {
@@ -34,7 +38,6 @@ func (api *API) HandleGetBalance(params json.RawMessage) (any, *err.RPCError) {
 }
 
 func (api *API) HandleGetBlockchain(params json.RawMessage) (any, *err.RPCError) {
-	log.Info("HandleGetBlockchain Executed...")
 
 	var args []GetBlockchainAPIArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
@@ -42,11 +45,16 @@ func (api *API) HandleGetBlockchain(params json.RawMessage) (any, *err.RPCError)
 		return nil, err.ErrInvalidArgument("Invalid parameters")
 	}
 
-	return api.cmd.GetBlockChain([]byte(args[0].StartHash), uint16(args[0].Max)), nil
+	blockchain, e := api.cmd.GetBlockChain([]byte(args[0].StartHash), uint16(args[0].Max))
+	if e != nil {
+		log.Error(e)
+		return nil, err.ErrInternal("Internal Error")
+	}
+
+	return blockchain, nil
 }
 
 func (api *API) HandleGetBlockByHeight(params json.RawMessage) (any, *err.RPCError) {
-	log.Info("HandleGetBlockByHeight Executed...")
 
 	var args []GetAPIBlockArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
@@ -54,11 +62,16 @@ func (api *API) HandleGetBlockByHeight(params json.RawMessage) (any, *err.RPCErr
 		return nil, err.ErrInvalidArgument("Invalid parameters")
 	}
 
-	return api.cmd.GetBlockByHeight(args[0].Height), nil
+	block, e := api.cmd.GetBlockByHeight(args[0].Height)
+	if e != nil {
+		log.Error(e)
+		return nil, err.ErrInternal("Internal error")
+	}
+
+	return block, nil
 }
 
 func (api *API) HandleGetBlocksByHeightRange(params json.RawMessage) (any, *err.RPCError) {
-	log.Info("HandleGetBlocksByHeightRange Executed...")
 
 	var args []GetAPIBlockByHeightRangeArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
@@ -66,11 +79,17 @@ func (api *API) HandleGetBlocksByHeightRange(params json.RawMessage) (any, *err.
 		return nil, err.ErrInvalidArgument("Invalid parameters")
 	}
 
-	return api.cmd.GetBlocksByHeightRange(args[0].Height, args[0].Limit), nil
+	blocks, e := api.cmd.GetBlocksByHeightRange(args[0].Height, args[0].Limit)
+
+	if e != nil {
+		log.Error(e)
+		return nil, err.ErrInternal("Internal error")
+	}
+
+	return blocks, nil
 }
 
 func (api *API) HandleSendTx(params json.RawMessage) (any, *err.RPCError) {
-	log.Info("HandleSendTx Executed...")
 
 	var args []SendTxAPIArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
@@ -78,13 +97,21 @@ func (api *API) HandleSendTx(params json.RawMessage) (any, *err.RPCError) {
 		return nil, err.ErrInvalidArgument("Invalid parameters")
 	}
 
-	return nil, nil
+	return api.cmd.SendTx(args[0].TXS), nil
+}
 
-	// return api.cmd.Send(args[0].SendFrom, args[0].SendTo, args[0].Amount, args[0].Fee, args[0].Mine), nil
+func (api *API) GetMiningTxs(params json.RawMessage) (any, *err.RPCError) {
+
+	var args []GetMiningTxsAPIArgs
+	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
+		log.Error(e)
+		return nil, err.ErrInvalidArgument("Invalid parameters")
+	}
+
+	return api.cmd.GetMiningTxs(args[0].Verbose), nil
 }
 
 func (api *API) GetBlockByHash(params json.RawMessage) (any, *err.RPCError) {
-	log.Info("GetBLockByHas Executed...")
 
 	var args []GETAPIBlockByHash
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
@@ -96,6 +123,5 @@ func (api *API) GetBlockByHash(params json.RawMessage) (any, *err.RPCError) {
 }
 
 func (api *API) GetAllUTXOs(params json.RawMessage) (any, *err.RPCError) {
-	log.Info("GetAllUTXOs Executed...")
 	return api.cmd.GetAllUTXOs(), nil
 }

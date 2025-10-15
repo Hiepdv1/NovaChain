@@ -5,14 +5,12 @@
 package dbutxo
 
 import (
-	"database/sql"
-
 	"github.com/google/uuid"
 )
 
 type Utxo struct {
 	ID          uuid.UUID
-	TxID        sql.NullString
+	TxID        string
 	OutputIndex int64
 	Value       string
 	PubKeyHash  string

@@ -49,7 +49,7 @@ func (h *TransactionHandler) CreateNewTransaction(c *fiber.Ctx) error {
 		return apperr.Response(c)
 	}
 
-	tx, apperr := h.service.CreateNewTransaction(walletPayload, *dto)
+	txsEncryped, apperr := h.service.CreateNewTransaction(walletPayload, *dto)
 
 	if apperr != nil {
 		return apperr.Response(c)
@@ -57,9 +57,60 @@ func (h *TransactionHandler) CreateNewTransaction(c *fiber.Ctx) error {
 
 	return response.Success(
 		c,
-		tx,
+		txsEncryped,
 		"Create New Transaction Successfully",
 		fiber.StatusCreated,
 	)
 
+}
+
+func (h *TransactionHandler) SendTransaction(c *fiber.Ctx) error {
+	walletPayload, apperr := helpers.GetLocalWallet(c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	dto, apperr := helpers.GetLocalBody[SendTransactionDataParsed](c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	apperr = h.service.SendTransaction(walletPayload, dto)
+
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	return response.Success(
+		c,
+		nil,
+		"Send Transaction Successfully",
+		fiber.StatusCreated,
+	)
+}
+
+func (h *TransactionHandler) GetListTransactionPending(c *fiber.Ctx) error {
+
+	wallet, apperr := helpers.GetLocalWallet(c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	pagination, apperr := helpers.GetLocalQuery[dto.PaginationQuery](c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	txPendings, paginationMeta, apperr := h.service.TransactionPending(wallet, pagination)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	return response.SuccessList(
+		c,
+		txPendings,
+		*paginationMeta,
+		"Get list pending transactions successfully",
+		fiber.StatusOK,
+	)
 }

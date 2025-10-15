@@ -7,7 +7,7 @@ import CreatePassword from './create-password';
 import { toast } from '@/components/globalToaster';
 import { useRouter } from 'next/navigation';
 
-import { useWalletConnect } from '../hook/useWalletQuery';
+import { useWalletConnect } from '../hook/useWalletMutation';
 import { v4 as uuid } from 'uuid';
 import { CreateWallet, GetAddress } from '@/lib/db/wallet.store';
 import { AddWalletToStore, DelWalletByWalletKey } from '@/lib/db/wallet.index';

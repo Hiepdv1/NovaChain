@@ -23,8 +23,8 @@ INSERT INTO wallets (
 `
 
 type CreateWalletParams struct {
-	Address       string
-	PublicKey     string
+	Address       sql.NullString
+	PublicKey     sql.NullString
 	PublicKeyHash string
 	Balance       string
 	CreateAt      sql.NullTime
@@ -90,8 +90,8 @@ WHERE address = $2 AND public_key = $3 AND balance >= $1
 
 type DecreaseWalletBalanceParams struct {
 	Balance   string
-	Address   string
-	PublicKey string
+	Address   sql.NullString
+	PublicKey sql.NullString
 }
 
 func (q *Queries) DecreaseWalletBalance(ctx context.Context, arg DecreaseWalletBalanceParams) error {
@@ -104,8 +104,8 @@ SELECT EXISTS(SELECT 1 FROM wallets WHERE address = $1 AND public_key = $2)
 `
 
 type ExistsWalletByAddrAndPubkeyParams struct {
-	Address   string
-	PublicKey string
+	Address   sql.NullString
+	PublicKey sql.NullString
 }
 
 func (q *Queries) ExistsWalletByAddrAndPubkey(ctx context.Context, arg ExistsWalletByAddrAndPubkeyParams) (bool, error) {
@@ -160,8 +160,8 @@ SELECT id, address, public_key, public_key_hash, balance, create_at, last_login 
 `
 
 type GetWalletByAddrAndPubkeyParams struct {
-	Address   string
-	PublicKey string
+	Address   sql.NullString
+	PublicKey sql.NullString
 }
 
 func (q *Queries) GetWalletByAddrAndPubkey(ctx context.Context, arg GetWalletByAddrAndPubkeyParams) (Wallet, error) {
@@ -183,7 +183,7 @@ const getWalletByAddress = `-- name: GetWalletByAddress :one
 SELECT id, address, public_key, public_key_hash, balance, create_at, last_login FROM wallets WHERE address = $1 LIMIT 1
 `
 
-func (q *Queries) GetWalletByAddress(ctx context.Context, address string) (Wallet, error) {
+func (q *Queries) GetWalletByAddress(ctx context.Context, address sql.NullString) (Wallet, error) {
 	row := q.db.QueryRowContext(ctx, getWalletByAddress, address)
 	var i Wallet
 	err := row.Scan(
@@ -225,8 +225,8 @@ WHERE address = $2 AND public_key = $3
 
 type IncreaseWalletBalanceParams struct {
 	Balance   string
-	Address   string
-	PublicKey string
+	Address   sql.NullString
+	PublicKey sql.NullString
 }
 
 func (q *Queries) IncreaseWalletBalance(ctx context.Context, arg IncreaseWalletBalanceParams) error {
@@ -255,7 +255,7 @@ UPDATE wallets
 SET
     public_key = COALESCE(NULLIF($1::text, ''), public_key),
     public_key_hash = COALESCE(NULLIF($2::text, ''), public_key_hash),
-    balance = COALESCE(NULLIF($3::text, ''), balance),
+    balance = COALESCE($3, balance),
     address = COALESCE(NULLIF($4::text, ''), address),
     last_login = now()
 WHERE id =  $5
@@ -298,8 +298,8 @@ WHERE address = $1 AND public_key = $2
 `
 
 type UpdateWalletLastLoginParams struct {
-	Address   string
-	PublicKey string
+	Address   sql.NullString
+	PublicKey sql.NullString
 }
 
 func (q *Queries) UpdateWalletLastLogin(ctx context.Context, arg UpdateWalletLastLoginParams) error {

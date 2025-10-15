@@ -6,6 +6,23 @@ export interface BaseResponse<T> {
   data: T;
 }
 
+export interface PagainationMeta {
+  limit: number;
+  total: number;
+  currentPage: number;
+  nextCursor: any;
+  hasMore: boolean;
+}
+
+export interface BaseResponseList<T> {
+  success: true;
+  statusCode: number;
+  message?: string;
+  data: T;
+  meta: PagainationMeta;
+  traceId?: string;
+}
+
 export interface BaseErrorResponse extends Error {
   success?: false;
   message: string;

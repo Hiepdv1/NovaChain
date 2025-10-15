@@ -10,11 +10,12 @@ services:
     container_name: fullnode
     entrypoint: ["./entrypoint.sh"]
     volumes:
-      - fullnode_data:/app/data
+      - fullnode_data:/app/.chain
       - ./.env:/app/.env
+      - ./logs/fullnode:/app/logs
     environment:
       - INSTANCE_ID=9000
-      - WALLET_ADDRESS=1Bdsgq97REeG8L73CUfpgRG3Kg1ZT54HSZ
+      - WALLET_ADDRESS=1QC6DK4rXS7uQeuqn6W64CYsM5NQa2qH7a
       - PORT=9000
       - START_NODE_FLAGS=--Fullnode=true
       - WALLET_ADDRESS_CHECKSUM=4
@@ -34,13 +35,14 @@ services:
     container_name: miner
     entrypoint: ["./entrypoint.sh"]
     volumes:
-      - miner_data:/app/data
+      - miner_data:/app/.chain
       - ./.env:/app/.env
+      - ./logs/miner:/app/logs
     environment:
       - INSTANCE_ID=9001
-      - WALLET_ADDRESS=18GXvPuYsokcbLeseopRrYSoBUT1qSp7tw
+      - WALLET_ADDRESS=1FrBKbuGRApHz9RNxdeJ5SMu3ojQiSwATS
       - PORT=9001
-      - START_NODE_FLAGS=--Miner=true --Address=18GXvPuYsokcbLeseopRrYSoBUT1qSp7tw
+      - START_NODE_FLAGS=--Miner=true --Address=1FrBKbuGRApHz9RNxdeJ5SMu3ojQiSwATS
       - WALLET_ADDRESS_CHECKSUM=4
     ports:
       - "9001:9001"
@@ -58,11 +60,12 @@ services:
     container_name: fullnode_rpc
     entrypoint: ["./entrypoint.sh"]
     volumes:
-      - fullnode_owner_data:/app/data
+      - fullnode_owner_data:/app/.chain
       - ./.env:/app/.env
+      - ./logs/fullnode_rpc:/app/logs
     environment:
       - INSTANCE_ID=9002
-      - WALLET_ADDRESS=1EfKZzesCJgahgUuWMKUneQ9ymuCTtbTA2
+      - WALLET_ADDRESS=1FvWRakdEUxjVb9d2XoKdC9apVC8nbeASj
       - PORT=9002
       - START_NODE_FLAGS=--Fullnode=true --RPC=true --RPC-Port=9050 --RPC-Addr=0.0.0.0 --RPC-Mode=http
       - WALLET_ADDRESS_CHECKSUM=4

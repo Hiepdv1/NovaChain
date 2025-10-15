@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS wallets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    address CHAR(64) NOT NULL UNIQUE,
-    public_key TEXT NOT NULL UNIQUE,
-    public_key_hash TEXT NOT NULL UNIQUE,
+    address CHAR(34) UNIQUE,
+    public_key TEXT UNIQUE,
+    public_key_hash VARCHAR(40) NOT NULL UNIQUE,
     balance NUMERIC(20, 8) NOT NULL DEFAULT 0 CHECK (balance >= 0),
     create_at TIMESTAMP DEFAULT now(),
     last_login TIMESTAMP DEFAULT now()

@@ -1,3 +1,5 @@
 #build.ps1
 
-docker build --no-cache -t blockchain:latest .
+
+docker build --platform=linux/amd64 -t blockchain:latest . --progress=plain
+

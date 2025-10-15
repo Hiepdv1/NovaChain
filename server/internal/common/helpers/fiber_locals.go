@@ -35,3 +35,20 @@ func GetLocalBody[T any](c *fiber.Ctx) (*T, *apperror.AppError) {
 
 	return &dto, nil
 }
+
+func GetLocalQuery[T any](c *fiber.Ctx) (*T, *apperror.AppError) {
+	dto, ok := c.Locals("query").(T)
+	if !ok {
+		return nil, apperror.Internal("query not found in context", nil)
+	}
+	return &dto, nil
+}
+
+func GetLocalRaw[T any](c *fiber.Ctx, localKey string) (*T, *apperror.AppError) {
+	dto, ok := c.Locals(localKey + "_raw").(T)
+	if !ok {
+		return nil, apperror.Internal("body not found in context", nil)
+	}
+
+	return &dto, nil
+}

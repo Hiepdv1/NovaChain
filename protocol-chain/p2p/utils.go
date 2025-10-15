@@ -30,7 +30,7 @@ func BlockForNetwork(block blockchain.Block) blockchain.Block {
 		Nonce:        block.Nonce,
 		Transactions: block.Transactions,
 		MerkleRoot:   block.MerkleRoot,
-		Difficulty:   block.Difficulty,
+		NBits:        block.NBits,
 		TxCount:      block.TxCount,
 	}
 }
@@ -52,4 +52,12 @@ func BytesToCmd(data []byte) string {
 	}
 
 	return string(cmd)
+}
+
+func SliceMap[T any, U any](in []T, f func(T) U) []U {
+	out := make([]U, len(in))
+	for i, v := range in {
+		out[i] = f(v)
+	}
+	return out
 }

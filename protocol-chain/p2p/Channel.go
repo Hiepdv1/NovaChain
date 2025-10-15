@@ -6,9 +6,10 @@ import (
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	log "github.com/sirupsen/logrus"
 )
 
-const ChannelBufSize = 128
+const ChannelBufSize = 1000
 
 type Channel struct {
 	ctx   context.Context
@@ -19,6 +20,8 @@ type Channel struct {
 	channelName string
 	self        peer.ID
 	Content     chan *ChannelContent
+
+	worker *Worker[*pubsub.Message]
 }
 
 type ChannelContent struct {
@@ -36,7 +39,7 @@ func JoinChannel(ctx context.Context, pub *pubsub.PubSub, selfId peer.ID, channe
 
 	var sub *pubsub.Subscription
 	if subscribe {
-		sub, err = topic.Subscribe()
+		sub, err = topic.Subscribe(pubsub.WithBufferSize(ChannelBufSize))
 		if err != nil {
 			return nil, err
 		}
@@ -54,13 +57,17 @@ func JoinChannel(ctx context.Context, pub *pubsub.PubSub, selfId peer.ID, channe
 		Content:     make(chan *ChannelContent, ChannelBufSize),
 	}
 
+	worker := NewWorker(1000, ctx, Error, Channel.HandleContent)
+	worker.Start(1)
+
+	Channel.worker = worker
+
 	go Channel.readLoop()
 
 	return Channel, nil
 }
 
 func (channel *Channel) ListPeers() []peer.ID {
-	// return channel.pub.ListPeers(topicName(channel.channelName))
 	return channel.topic.ListPeers()
 }
 
@@ -71,12 +78,36 @@ func (channel *Channel) Publish(message string, payload []byte, SendTo string) e
 		SendTo:   SendTo,
 		Payload:  payload,
 	}
+
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
 	return channel.topic.Publish(channel.ctx, msgBytes)
+}
+
+func (channel *Channel) HandleContent(content *pubsub.Message) {
+	if content.ReceivedFrom == channel.self {
+		return
+	}
+
+	NewContent := new(ChannelContent)
+	err := json.Unmarshal(content.Data, NewContent)
+	if err != nil {
+		log.Errorf("Umashal Messsage with err: %v", err)
+		return
+	}
+
+	if NewContent.SendTo != "" && NewContent.SendTo != channel.self.String() {
+		return
+	}
+
+	select {
+	case channel.Content <- NewContent:
+	default:
+		log.Warn("Worker queue full, skip message")
+	}
 }
 
 func (channel *Channel) readLoop() {
@@ -87,25 +118,12 @@ func (channel *Channel) readLoop() {
 	for {
 		content, err := channel.sub.Next(channel.ctx)
 		if err != nil {
+			log.Errorf("Receiver Message with error: %v", err)
 			close(channel.Content)
 			return
 		}
 
-		if content.ReceivedFrom == channel.self {
-			continue
-		}
-
-		NewContent := new(ChannelContent)
-		err = json.Unmarshal(content.Data, NewContent)
-		if err != nil {
-			continue
-		}
-
-		if NewContent.SendTo != "" && NewContent.SendTo != channel.self.String() {
-			continue
-		}
-
-		channel.Content <- NewContent
+		channel.worker.Push(content)
 	}
 }
 

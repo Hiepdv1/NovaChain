@@ -57,7 +57,7 @@ const NavBar = () => {
 
           return (
             <Link
-              className={`${classActive} hover:text-gray-950 text-gray-600 dark:text-gray-400 transition-all duration-200 rounded-lg font-medium text-xs px-4 py-3`}
+              className={`${classActive} hover:text-gray-950 text-gray-600 dark:text-gray-400 transition-all duration-200 rounded-lg font-medium text-sm px-4 py-3`}
               key={navItem.id}
               href={navItem.to}
             >

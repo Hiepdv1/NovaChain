@@ -17,9 +17,10 @@ type Block struct {
 	Nonce      int64
 	Height     int64
 	MerkleRoot string
-	Difficulty int64
+	Nbits      int64
 	TxCount    int64
 	NchainWork string
+	Size       float64
 	Timestamp  int64
 }
 
@@ -27,7 +28,11 @@ type Transaction struct {
 	ID       uuid.UUID
 	TxID     string
 	BID      string
-	CreateAt sql.NullTime
+	CreateAt int64
+	Amount   sql.NullString
+	Fee      sql.NullString
+	Fromhash sql.NullString
+	Tohash   sql.NullString
 }
 
 type TxInput struct {

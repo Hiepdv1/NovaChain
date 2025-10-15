@@ -13,7 +13,11 @@ type ChainRoutes struct {
 	chainGroup fiber.Router
 }
 
-func NewChainRoutes(rpcRepo RPCChainRepository, dbRepo DBChainRepository, tranRepo transaction.DbTransactionRepository) *ChainRoutes {
+func NewChainRoutes(
+	rpcRepo RPCChainRepository,
+	dbRepo DBChainRepository,
+	tranRepo transaction.DbTransactionRepository,
+) *ChainRoutes {
 	service := NewChainService(rpcRepo, dbRepo, tranRepo)
 	handler := NewChainHandler(service)
 	return &ChainRoutes{handler: handler}
@@ -24,5 +28,14 @@ func (r *ChainRoutes) InitRoutes(router fiber.Router) {
 }
 
 func (r *ChainRoutes) RegisterPublic(router fiber.Router) {
-	r.chainGroup.Get("/blocks", middlewares.ValidateQuery[dto.PaginationQuery](), r.handler.GetBlocks)
+	r.chainGroup.Get("/blocks",
+		middlewares.ValidateQuery[dto.PaginationQuery](false),
+		r.handler.GetBlocks,
+	)
+
+	r.chainGroup.Get("/search",
+		middlewares.ValidateQuery[GetSearchResultDto](false),
+		r.handler.GetSearchResult,
+	)
+
 }

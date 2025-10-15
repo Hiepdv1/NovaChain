@@ -65,6 +65,18 @@ func (w *Wallet) Address() []byte {
 	return address
 }
 
+func PubKeyToAddr(pubKey []byte) []byte {
+	pubHash := PublicKeyHash(pubKey)
+	versionedHash := append([]byte{version}, pubHash...)
+
+	checksum := CheckSum(versionedHash)
+
+	fullHash := append(versionedHash, checksum...)
+	address := Base58Encode(fullHash)
+
+	return address
+}
+
 func (w *Wallet) Serialize() (*WalletSerializable, error) {
 
 	privKey := w.PrivateKey.D.Bytes()

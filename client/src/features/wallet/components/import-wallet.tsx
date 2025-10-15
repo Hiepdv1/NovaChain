@@ -15,19 +15,20 @@ import Button from '@/components/button';
 import { toast } from '@/components/globalToaster';
 import {
   AddWalletToStore,
-  DelWalletByWalletKey,
+  DelWalletPool,
   GetWalletByWalletKey,
 } from '@/lib/db/wallet.index';
 import {
   DecryptedPrivateKeyFromExport,
   SignPayload,
 } from '@/lib/crypto/wallet.crypto';
-import { useWalletImport } from '../hook/useWalletQuery';
+
 import { WalletConnectData } from '../types/wallet';
 import { GetAddress, GetPublicKeyFromPrivateKey } from '@/lib/db/wallet.store';
 import { v4 as uuid } from 'uuid';
 import { useRouter } from 'next/navigation';
 import useWalletContext from '@/components/providers/wallet-provider';
+import { useWalletImport } from '../hook/useWalletMutation';
 
 interface ImportWallet {
   onSwitchModal(modalName: ModalName): void;
@@ -179,7 +180,7 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
         },
         {
           onError: async () => {
-            await DelWalletByWalletKey(privateKey.encode);
+            await DelWalletPool();
             onStepUpdate(false);
           },
           onSuccess: () => {
@@ -191,7 +192,7 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
               currentStep: 3,
             }));
 
-            toast.success('✅ Wallet encrypted successfully');
+            toast.success('Wallet encrypted successfully');
           },
         },
       );
@@ -272,14 +273,14 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
   }, []);
 
   const onBackToHome = async () => {
-    await refetch();
+    await refetch?.();
     onStepUpdate(false, 1);
     router.push('/');
     router.refresh();
   };
 
   const onAccessWallet = async () => {
-    await refetch();
+    await refetch?.();
     onStepUpdate(false, 1);
     router.push('/wallet/me');
     router.refresh();

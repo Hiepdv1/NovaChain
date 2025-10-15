@@ -11,6 +11,7 @@ type RPCUtxoRepository interface {
 }
 
 type DbUTXORepository interface {
+	GetUTXOByTxIDAndOut(ctx context.Context, arg dbutxo.GetUTXOByTxIDAndOutParams, tx *sql.Tx) (dbutxo.Utxo, error)
 	CreateUTXO(ctx context.Context, args dbutxo.CreateUTXOParams, tx *sql.Tx) (dbutxo.Utxo, error)
 	DeleteUTXO(ctx context.Context, args dbutxo.DeleteUTXOParams, tx *sql.Tx) error
 	DeleteUTXOByBlockID(ctx context.Context, b_id string, tx *sql.Tx) error

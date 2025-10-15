@@ -24,6 +24,7 @@ type Config struct {
 	FullNode              bool
 	SystemKey             string
 	Wallet_Padding        string
+	Peer_TTL_Minute       int64
 }
 
 func New() *Config {
@@ -35,6 +36,7 @@ func New() *Config {
 		FullNode:              GetEnvAsBool("FULL_NODE", false),
 		SystemKey:             GetEnvAsStr("SYSTEM_KEY", ""),
 		Wallet_Padding:        GetEnvAsStr("WALLET_PADDING", ""),
+		Peer_TTL_Minute:       GetEnvAsInt("PEER_TTL_MINUTE", 6),
 	}
 }
 

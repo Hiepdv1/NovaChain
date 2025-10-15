@@ -1,8 +1,6 @@
 package blockchain
 
 import (
-	"core-blockchain/common/utils"
-
 	"github.com/dgraph-io/badger"
 )
 
@@ -11,32 +9,38 @@ type BlockchainIterator struct {
 	Database    *badger.DB
 }
 
-func (bc *Blockchain) Iterator() *BlockchainIterator {
-	if bc.LastHash == nil {
-		return nil
+func (bc *Blockchain) Iterator() (*BlockchainIterator, error) {
+	LastHash, err := bc.GetLastBlock()
+	if err != nil {
+		return nil, err
 	}
 
-	return &BlockchainIterator{bc.LastHash, bc.Database}
+	return &BlockchainIterator{LastHash.Hash, bc.Database}, nil
 }
 
-func (iter *BlockchainIterator) Next() *Block {
+func (iter *BlockchainIterator) Next() (*Block, error) {
 	var block *Block
-	var encodedBlock []byte
 
 	err := iter.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(iter.CurrentHash)
-		utils.ErrorHandle(err)
-		encodedBlock, err = item.ValueCopy(nil)
-		utils.ErrorHandle(err)
-		block = block.Deserialize(encodedBlock)
+		if err != nil {
+			return err
+		}
+		encodedBlock, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		block = DeserializeBlockData(encodedBlock)
 
 		return err
 	})
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		return nil, err
+	}
 
 	iter.CurrentHash = block.PrevHash
 
-	return block
+	return block, nil
 
 }

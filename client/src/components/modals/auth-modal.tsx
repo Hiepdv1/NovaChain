@@ -9,9 +9,9 @@ import {
   DecryptPrivateKeyWithPassword,
   SignPayload,
 } from '@/lib/crypto/wallet.crypto';
-import { buildSignatureWallet } from '@/features/wallet/helpers/wallet-helper';
-import { useWalletImport } from '@/features/wallet/hook/useWalletQuery';
+import { useWalletImport } from '@/features/wallet/hook/useWalletMutation';
 import useWalletContext from '../providers/wallet-provider';
+import { buildWalletSignaturePayload } from '@/features/wallet/helpers/wallet-helper';
 
 interface AuthModalProps extends ReAuthModal {
   closeModal: () => void;
@@ -118,7 +118,7 @@ const AuthModal = ({
       setStatus({ valid: true, message: '' });
     }
 
-    const payload = buildSignatureWallet(privateKey);
+    const payload = buildWalletSignaturePayload(privateKey);
 
     const sig = SignPayload(privateKey, payload);
 

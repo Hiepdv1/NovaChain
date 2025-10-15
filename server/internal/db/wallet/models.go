@@ -12,8 +12,8 @@ import (
 
 type Wallet struct {
 	ID            uuid.UUID
-	Address       string
-	PublicKey     string
+	Address       sql.NullString
+	PublicKey     sql.NullString
 	PublicKeyHash string
 	Balance       string
 	CreateAt      sql.NullTime

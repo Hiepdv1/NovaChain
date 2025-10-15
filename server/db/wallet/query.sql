@@ -12,7 +12,7 @@ UPDATE wallets
 SET
     public_key = COALESCE(NULLIF(sqlc.narg('public_key')::text, ''), public_key),
     public_key_hash = COALESCE(NULLIF(sqlc.narg('public_key_hash')::text, ''), public_key_hash),
-    balance = COALESCE(NULLIF(sqlc.narg('balance')::text, ''), balance),
+    balance = COALESCE(sqlc.narg('balance'), balance),
     address = COALESCE(NULLIF(sqlc.narg('address')::text, ''), address),
     last_login = now()
 WHERE id =  @id

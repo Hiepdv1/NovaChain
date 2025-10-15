@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"bytes"
-	"core-blockchain/common/utils"
 	"encoding/hex"
 
 	"github.com/dgraph-io/badger"
@@ -17,54 +16,7 @@ type UTXOSet struct {
 	Blockchain *Blockchain
 }
 
-// func (u *UTXOSet) FindSpendableOutputs(publicKeyHash []byte, amount float64) (float64, map[string][]int) {
-// 	unspentOuts := make(map[string][]int)
-// 	accumulated := float64(0)
-
-// 	db := u.Blockchain.Database
-
-// 	err := db.View(func(txn *badger.Txn) error {
-// 		opts := badger.DefaultIteratorOptions
-// 		opts.PrefetchValues = false
-
-// 		it := txn.NewIterator(opts)
-// 		defer it.Close()
-
-// 		for it.Seek(utxoPrefix); it.ValidForPrefix(utxoPrefix); it.Next() {
-// 			item := it.Item()
-
-// 			k := item.KeyCopy(nil)
-// 			v, err := item.ValueCopy(nil)
-// 			utils.ErrorHandle(err)
-
-// 			outs := DeSerializeOuputs(v)
-
-// 			k = bytes.TrimPrefix(k, utxoPrefix)
-
-// 			txID := hex.EncodeToString(k)
-
-// 			for outIdx, out := range outs.Outputs {
-// 				if out.IsLockWithKey(publicKeyHash) && accumulated < amount {
-// 					accumulated += out.Value
-// 					unspentOuts[txID] = append(unspentOuts[txID], outIdx)
-
-// 					if accumulated >= amount {
-// 						break
-// 					}
-// 				}
-// 			}
-
-// 		}
-
-// 		return nil
-// 	})
-
-// 	utils.ErrorHandle(err)
-
-// 	return accumulated, unspentOuts
-// }
-
-func (u *UTXOSet) FindUTXOPrefix(txID []byte) (*TxOutputs, []byte) {
+func (u *UTXOSet) FindUTXOPrefix(txID []byte) (*TxOutputs, []byte, error) {
 	var outs TxOutputs
 	var key []byte
 
@@ -72,39 +24,63 @@ func (u *UTXOSet) FindUTXOPrefix(txID []byte) (*TxOutputs, []byte) {
 		k := append(utxoPrefix, txID...)
 
 		item, err := txn.Get([]byte(k))
-		utils.ErrorHandle(err)
+		if err != nil {
+			return err
+		}
 
 		key = item.KeyCopy(nil)
 
 		v, err := item.ValueCopy(nil)
-		utils.ErrorHandle(err)
+		if err != nil {
+			return err
+		}
 
-		outs = DeSerializeOuputs(v)
+		outputs, err := DeSerializeOuputs(v)
+		if err != nil {
+			return err
+		}
+
+		outs = *outputs
 
 		return nil
 
 	})
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return &outs, key
+	return &outs, key, nil
 }
 
-func (u *UTXOSet) FindSpendableOutputs(publicKeyHash []byte, amount float64) (float64, map[string][]int) {
+func (u *UTXOSet) FindSpendableOutputs(publicKeyHash []byte, amount float64) (float64, map[string][]int, error) {
 	unspentOuts := make(map[string][]int)
 	accumulated := float64(0)
 
-	iter := u.Blockchain.Iterator()
+	err := u.Blockchain.Database.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
 
-	for {
-		block := iter.Next()
+		opts.PrefetchValues = true
+		it := txn.NewIterator(opts)
 
-		for _, tx := range block.Transactions {
-			outs, key := u.FindUTXOPrefix(tx.ID)
+		defer it.Close()
 
-			k := bytes.TrimPrefix(key, utxoPrefix)
+		prefix := utxoPrefix
 
-			txID := hex.EncodeToString(k)
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			outs, err := DeSerializeOuputs(v)
+			if err != nil {
+				return err
+			}
+
+			key := item.Key()
+			txID := hex.EncodeToString(bytes.TrimPrefix(key, prefix))
 
 			for outIdx, out := range outs.Outputs {
 				if out.IsLockWithKey(publicKeyHash) && accumulated < amount {
@@ -116,76 +92,61 @@ func (u *UTXOSet) FindSpendableOutputs(publicKeyHash []byte, amount float64) (fl
 					}
 				}
 			}
-
 		}
 
-		if len(block.PrevHash) == 0 {
-			break
-		}
+		return nil
+	})
+
+	if err != nil {
+		return 0, nil, err
 	}
 
-	return accumulated, unspentOuts
+	return accumulated, unspentOuts, nil
 }
 
-// func (u *UTXOSet) FindUnSpentTransactions(pubKeyHash []byte) []TxOutput {
-// 	var UTXOs []TxOutput
-// 	db := u.Blockchain.Database
-
-// 	err := db.View(func(txn *badger.Txn) error {
-// 		opts := badger.DefaultIteratorOptions
-// 		it := txn.NewIterator(opts)
-// 		defer it.Close()
-
-// 		for it.Seek(utxoPrefix); it.ValidForPrefix(utxoPrefix); it.Next() {
-// 			item := it.Item()
-// 			v, err := item.ValueCopy(nil)
-
-// 			utils.ErrorHandle(err)
-// 			outs := DeSerializeOuputs(v)
-
-// 			for _, out := range outs.Outputs {
-// 				if out.IsLockWithKey(pubKeyHash) {
-// 					UTXOs = append(UTXOs, out)
-// 				}
-// 			}
-// 		}
-
-// 		return nil
-// 	})
-
-// 	utils.ErrorHandle(err)
-
-// 	return UTXOs
-// }
-
-func (u *UTXOSet) FindUnSpentTransactions(pubKeyHash []byte) []TxOutput {
+func (u *UTXOSet) FindUnSpentTransactions(pubKeyHash []byte) ([]TxOutput, error) {
 	var UTXOs []TxOutput
 
-	iter := u.Blockchain.Iterator()
+	err := u.Blockchain.Database.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
 
-	for {
-		block := iter.Next()
+		opts.PrefetchValues = true
+		it := txn.NewIterator(opts)
 
-		for _, tx := range block.Transactions {
-			out, _ := u.FindUTXOPrefix(tx.ID)
+		defer it.Close()
 
-			for _, out := range out.Outputs {
+		prefix := utxoPrefix
+
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			outs, err := DeSerializeOuputs(v)
+			if err != nil {
+				return err
+			}
+
+			for _, out := range outs.Outputs {
 				if out.IsLockWithKey(pubKeyHash) {
 					UTXOs = append(UTXOs, out)
 				}
 			}
 		}
 
-		if len(block.PrevHash) == 0 {
-			break
-		}
+		return nil
+	})
 
+	if err != nil {
+		return nil, err
 	}
 
-	return UTXOs
+	return UTXOs, nil
 }
 
-func (u *UTXOSet) CountTransactions() int {
+func (u *UTXOSet) CountTransactions() (int, error) {
 	db := u.Blockchain.Database
 	counter := 0
 
@@ -202,12 +163,14 @@ func (u *UTXOSet) CountTransactions() int {
 		return nil
 	})
 
-	utils.ErrorHandle(err)
+	if err != nil {
+		return 0, err
+	}
 
-	return counter
+	return counter, nil
 }
 
-func (u *UTXOSet) Update(bl *Block) {
+func (u *UTXOSet) Update(bl *Block) error {
 	db := u.Blockchain.Database
 
 	err := db.Update(func(txn *badger.Txn) error {
@@ -218,21 +181,35 @@ func (u *UTXOSet) Update(bl *Block) {
 				}
 
 				txID := append(utxoPrefix, tx.ID...)
-				err := txn.Set(txID, newOutputs.Serialize())
+				serialize, err := newOutputs.Serialize()
+				if err != nil {
+					return err
+				}
 
-				utils.ErrorHandle(err)
+				err = txn.Set(txID, serialize)
+
+				if err != nil {
+					return err
+				}
 			} else {
 				for _, in := range tx.Inputs {
 					updatedOutputs := TxOutputs{}
 					inID := append(utxoPrefix, tx.ID...)
 
 					item, err := txn.Get(inID)
-					utils.ErrorHandle(err)
+					if err != nil {
+						return err
+					}
 
 					v, err := item.ValueCopy(nil)
-					utils.ErrorHandle(err)
+					if err != nil {
+						return err
+					}
 
-					outs := DeSerializeOuputs(v)
+					outs, err := DeSerializeOuputs(v)
+					if err != nil {
+						return err
+					}
 
 					for outIdx, out := range outs.Outputs {
 						if int64(outIdx) != in.Out {
@@ -242,11 +219,16 @@ func (u *UTXOSet) Update(bl *Block) {
 
 					if len(updatedOutputs.Outputs) == 0 {
 						if err := txn.Delete(inID); err != nil {
-							utils.ErrorHandle(err)
+							return err
 						}
 					} else {
-						if err := txn.Set(inID, updatedOutputs.Serialize()); err != nil {
-							utils.ErrorHandle(err)
+						serialize, err := updatedOutputs.Serialize()
+						if err != nil {
+							return err
+						}
+
+						if err := txn.Set(inID, serialize); err != nil {
+							return err
 						}
 					}
 				}
@@ -256,10 +238,16 @@ func (u *UTXOSet) Update(bl *Block) {
 				}
 
 				txID := append(utxoPrefix, tx.ID...)
+				serialize, err := newOutputs.Serialize()
+				if err != nil {
+					return err
+				}
 
-				err := txn.Set(txID, newOutputs.Serialize())
+				err = txn.Set(txID, serialize)
 
-				utils.ErrorHandle(err)
+				if err != nil {
+					return err
+				}
 
 			}
 		}
@@ -267,31 +255,40 @@ func (u *UTXOSet) Update(bl *Block) {
 		return nil
 	})
 
-	utils.ErrorHandle(err)
+	return err
 }
 
-func (u *UTXOSet) Compute() {
+func (u *UTXOSet) Compute() error {
 	db := u.Blockchain.Database
 
 	u.DeteleByPrefix(utxoPrefix)
 
-	UTXO := u.Blockchain.FindUTXO()
+	UTXO, _ := u.Blockchain.FindUTXO()
 
 	err := db.Update(func(txn *badger.Txn) error {
 		for txId, outs := range UTXO {
 			key, err := hex.DecodeString(txId)
-			utils.ErrorHandle(err)
+			if err != nil {
+				return err
+			}
 
 			key = append(utxoPrefix, key...)
-			err = txn.Set(key, outs.Serialize())
+			serialize, err := outs.Serialize()
+			if err != nil {
+				return err
+			}
 
-			utils.ErrorHandle(err)
+			err = txn.Set(key, serialize)
+
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
 	})
 
-	utils.ErrorHandle(err)
+	return err
 
 }
 
@@ -329,7 +326,7 @@ func (u *UTXOSet) DeteleByPrefix(prefix []byte) {
 
 			if keysCollected == collectSize {
 				if err := deleteKeys(keysForDelete); err != nil {
-					utils.ErrorHandle(err)
+					return err
 				}
 
 				keysForDelete = make([][]byte, 0, collectSize)
@@ -339,7 +336,7 @@ func (u *UTXOSet) DeteleByPrefix(prefix []byte) {
 
 		if keysCollected > 0 {
 			if err := deleteKeys(keysForDelete); err != nil {
-				utils.ErrorHandle(err)
+				return err
 			}
 		}
 

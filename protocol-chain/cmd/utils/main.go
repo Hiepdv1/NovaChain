@@ -3,6 +3,7 @@ package utils
 import (
 	"core-blockchain/common/env"
 	"core-blockchain/common/err"
+	"core-blockchain/common/helpers"
 	"core-blockchain/common/utils"
 	blockchain "core-blockchain/core"
 	"core-blockchain/p2p"
@@ -24,14 +25,18 @@ var (
 )
 
 func (cli *CommandLine) CreateBlockchain() {
-
+	defer helpers.RecoverAndLog()
 	if blockchain.Exists(cli.Blockchain.InstanceId) {
 		log.Infof("Blockchain already exists for instance ID: %s", cli.Blockchain.InstanceId)
 		log.Info("Path: ", blockchain.GetDatabasePath(cli.Blockchain.InstanceId))
 		return
 	}
 
-	chain := blockchain.InitBlockchain(cli.Blockchain.InstanceId)
+	chain, err := blockchain.InitBlockchain(cli.Blockchain.InstanceId)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
@@ -45,6 +50,7 @@ func (cli *CommandLine) CreateBlockchain() {
 }
 
 func (cli *CommandLine) StartNode(listenPort, minerAddress string, miner, fullNode bool, callback func(*p2p.Network)) {
+	defer helpers.RecoverAndLog()
 	if miner {
 		log.Infof("Starting Node %s as a MINER\n", listenPort)
 		if len(minerAddress) > 0 {
@@ -56,40 +62,58 @@ func (cli *CommandLine) StartNode(listenPort, minerAddress string, miner, fullNo
 		log.Infof("Starting Node on PORT: %s\n", listenPort)
 	}
 
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	p2p.StartNode(chain, listenPort, minerAddress, miner, fullNode, callback)
 }
 
-func (cli *CommandLine) UpdateInstance(InstanceId string, closeDbAlways bool) *CommandLine {
+func (cli *CommandLine) UpdateInstance(InstanceId string, closeDbAlways bool) (*CommandLine, error) {
+	defer helpers.RecoverAndLog()
 	utils.SetLog(InstanceId)
 	cli.Blockchain.InstanceId = InstanceId
 
 	if blockchain.Exists(InstanceId) {
-		cli.Blockchain = cli.Blockchain.ContinueBlockchain()
+		chain, err := cli.Blockchain.ContinueBlockchain()
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+		cli.Blockchain = chain
 	}
 
 	cli.CloseDbAlways = closeDbAlways
 
-	return cli
+	return cli, nil
 }
 
 func (cli *CommandLine) SendTx(txs []*blockchain.Transaction) SendResponse {
-
+	defer helpers.RecoverAndLog()
 	listTxs := make([]string, 0)
+
+	if len(txs) == 0 {
+		return SendResponse{
+			Message: "Empty",
+			Count:   0,
+			ListTxs: []string{},
+			Error:   nil,
+		}
+	}
 
 	for _, tx := range txs {
 		if !cli.Blockchain.VerifyTransaction(tx) {
+			log.Warnf("Verify failed: %s", hex.EncodeToString(tx.ID))
 			return SendResponse{
-				Error: err.ErrInvalidArgument("Transaction invalid", string(tx.ID)),
+				Error: err.ErrInvalidArgument("Transaction invalid", hex.EncodeToString(tx.ID)),
 			}
 		}
-		listTxs = append(listTxs, string(tx.ID))
+		listTxs = append(listTxs, hex.EncodeToString(tx.ID))
 	}
 
 	if cli.P2P != nil {
-		for _, tx := range txs {
-			cli.P2P.Transactions <- tx
-		}
+		cli.P2P.Transactions <- txs
 	}
 
 	return SendResponse{
@@ -100,93 +124,34 @@ func (cli *CommandLine) SendTx(txs []*blockchain.Transaction) SendResponse {
 	}
 }
 
-// func (cli *CommandLine) Send(from, to string, amount, fee float64, mineNow bool) SendResponse {
-// 	if !wallet.ValidateAddress(from) {
-// 		log.Error("SendFrom address is Invalid ")
-// 		return SendResponse{
-// 			Error: err.ErrInvalidArgument("SendTo address is invalid"),
-// 		}
-// 	}
+func (cli *CommandLine) GetMiningTxs(verbose bool) GetMiningTxsResponse {
+	defer helpers.RecoverAndLog()
+	listTxs := make([]any, 0)
 
-// 	if !wallet.ValidateAddress(to) {
-// 		log.Error("SendFrom address is Invalid ")
-// 		return SendResponse{
-// 			Error: err.ErrInvalidArgument("SendFrom address is invalid"),
-// 		}
-// 	}
+	if verbose {
+		for _, txInfo := range p2p.MemoryPool.Queued {
+			listTxs = append(listTxs, txInfo.Transaction)
+		}
+	} else {
+		for _, txInfo := range p2p.MemoryPool.Queued {
+			listTxs = append(listTxs, hex.EncodeToString(txInfo.Transaction.ID))
+		}
+	}
 
-// 	chain := cli.Blockchain.ContinueBlockchain()
-// 	if cli.CloseDbAlways {
-// 		defer chain.Database.Close()
-// 	}
-
-// 	utxos := blockchain.UTXOSet{
-// 		Blockchain: chain,
-// 	}
-
-// tx, err := blockchain.NewTransaction(&wallet, to, amount, fee, &utxos)
-// if err != nil {
-// 	log.Error(err)
-// 	return SendResponse{
-// 		Error: &err{
-// 			Code:    5028,
-// 			Message: "Failed to execute transaction",
-// 		},
-// 	}
-// }
-
-// 	if mineNow {
-// 		txs := []*blockchain.Transaction{tx}
-// 		log.Info("Transaction executed")
-
-// 		block, err := chain.MineBlock(txs, from, cli.P2P.HandleReoganizeTx)
-
-// 		if err != nil {
-// 			log.Error("Failed to mine block: ", err)
-// 			return SendResponse{
-// 				Error: &Error{
-// 					Code:    5028,
-// 					Message: "Failed to mine block",
-// 				},
-// 			}
-// 		}
-
-// 		if block == nil {
-// 			log.Error("Failed to mine block")
-// 			return SendResponse{
-// 				SendFrom:  from,
-// 				SendTo:    to,
-// 				Amount:    amount,
-// 				Timestamp: time.Now().Unix(),
-// 				Error: &Error{
-// 					Code:    5028,
-// 					Message: "Failed to mine block",
-// 				},
-// 			}
-// 		}
-
-// 		utxos.Update(block)
-
-// 		if cli.P2P != nil {
-// 			cli.P2P.Blocks <- block
-// 		}
-// 	} else {
-// 		if cli.P2P != nil {
-// 			cli.P2P.Transactions <- tx
-// 		}
-// 	}
-
-// 	return SendResponse{
-// 		SendFrom:  from,
-// 		SendTo:    to,
-// 		Amount:    amount,
-// 		Timestamp: time.Now().Unix(),
-// 		Error:     nil,
-// 	}
-// }
+	return GetMiningTxsResponse{
+		Message: "Get mining transactions successfully",
+		ListTxs: listTxs,
+		Count:   int64(len(listTxs)),
+		Error:   nil,
+	}
+}
 
 func (cli *CommandLine) ComputeUTXOs() {
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
@@ -196,8 +161,72 @@ func (cli *CommandLine) ComputeUTXOs() {
 		Blockchain: chain,
 	}
 	utxos.Compute()
-	count := utxos.CountTransactions()
+	count, err := utxos.CountTransactions()
+	if err != nil {
+		log.Errorf("Count Transaction with error: %v", err)
+		return
+	}
 	log.Infof("Rebuild DONE!!!, there are %d transactions in the UTXOs set", count)
+}
+
+func (cli *CommandLine) PrintUtxos() {
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if cli.CloseDbAlways {
+		defer chain.Database.Close()
+	}
+
+	utxos, err := chain.FindUTXO()
+
+	if err != nil {
+		log.Errorf("Find utxos with error: %v", err)
+		return
+	}
+
+	for _, u := range utxos {
+		for _, out := range u.Outputs {
+			fmt.Printf("Pub_key_Hash: %x\n", out.PubKeyHash)
+			fmt.Printf("Value: %f\n", out.Value)
+
+			fmt.Printf("-------------------------------------------\n")
+		}
+	}
+
+	log.Infof("Rebuild DONE!!!")
+}
+
+func (cli *CommandLine) PrintBestChain() {
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if cli.CloseDbAlways {
+		defer chain.Database.Close()
+	}
+
+	block, err := chain.GetLastBlock()
+	if err != nil {
+		log.Errorf("Find last block with error: %v", err)
+		return
+	}
+
+	fmt.Printf("-------------------------------------------\n\n")
+
+	fmt.Printf("Current_Hash: %x\n", block.Hash)
+	fmt.Printf("Prev_Hash: %x\n", block.PrevHash)
+	fmt.Printf("Height: %d\n", block.Height)
+	fmt.Printf("NchainWork: %s\n", block.NChainWork.String())
+	fmt.Printf("NBit: %d\n", block.NBits)
+	fmt.Printf("Is_Valid: %v", chain.IsBlockValid(*block))
+
+	fmt.Println("\n-------------------------------------------")
+
 }
 
 func (cli *CommandLine) GetBalance(address string) BalanceResponse {
@@ -208,7 +237,15 @@ func (cli *CommandLine) GetBalance(address string) BalanceResponse {
 			Error:     err.ErrInvalidArgument("SendFrom address is invalid"),
 		}
 	}
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, e := cli.Blockchain.ContinueBlockchain()
+	if e != nil {
+		log.Error(e)
+		return BalanceResponse{
+			Address:   address,
+			Timestamp: time.Now().Unix(),
+			Error:     err.ErrInternal("Internal error"),
+		}
+	}
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
 	}
@@ -221,7 +258,15 @@ func (cli *CommandLine) GetBalance(address string) BalanceResponse {
 		Blockchain: chain,
 	}
 
-	UTXOs := utxos.FindUnSpentTransactions(publicKeyHash)
+	UTXOs, e := utxos.FindUnSpentTransactions(publicKeyHash)
+	if e != nil {
+		log.Errorf("Find UTXOS With Error: %v", e.Error())
+		return BalanceResponse{
+			Address:   address,
+			Timestamp: time.Now().Unix(),
+			Error:     err.ErrInternal("Internal error"),
+		}
+	}
 	for _, out := range UTXOs {
 		balance += out.Value
 	}
@@ -234,24 +279,27 @@ func (cli *CommandLine) GetBalance(address string) BalanceResponse {
 	}
 }
 
-func (cli *CommandLine) CreateWallet() string {
+func (cli *CommandLine) CreateWallet() (string, error) {
 	cwd := false
 	wallets, err := wallet.InitializeWallets(cwd)
-	utils.ErrorHandle(err)
-
+	if err != nil {
+		return "", err
+	}
 	address := wallets.AddWallet()
 
 	wallets.SaveFile(cwd)
 
 	log.Infof("NEW WALLET WITH ADDRESS: %s", address)
 
-	return address
+	return address, nil
 }
 
-func (cli *CommandLine) ListWallet() {
+func (cli *CommandLine) ListWallet() error {
 	cwd := false
 	wallets, err := wallet.InitializeWallets(cwd)
-	utils.ErrorHandle(err)
+	if err != nil {
+		return err
+	}
 
 	addresses := wallets.GetAllAddress()
 
@@ -268,20 +316,31 @@ func (cli *CommandLine) ListWallet() {
 		fmt.Println()
 		fmt.Printf("PublicKey: %s", hex.EncodeToString(w.PublicKey))
 		fmt.Println()
+
 	}
+
+	return nil
 }
 
 func (cli *CommandLine) PrintBlockchain() {
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
 	}
 
-	iter := chain.Iterator()
+	iter, err := chain.Iterator()
+	if err != nil {
+		log.Error(err)
+		return
+	}
 
 	for {
-		block := iter.Next()
+		block, _ := iter.Next()
 		fmt.Print("------------------------------------------------\n\n")
 		fmt.Printf("PrevHash: %x\n", block.PrevHash)
 		fmt.Printf("Hash: %x\n", block.Hash)
@@ -303,10 +362,13 @@ func (cli *CommandLine) PrintBlockchain() {
 	}
 }
 
-func (cli *CommandLine) GetBlockChain(startHash []byte, max uint16) []*blockchain.Block {
+func (cli *CommandLine) GetBlockChain(startHash []byte, max uint16) ([]*blockchain.Block, error) {
 	var blocks []*blockchain.Block
 
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		return nil, err
+	}
 
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
@@ -316,7 +378,9 @@ func (cli *CommandLine) GetBlockChain(startHash []byte, max uint16) []*blockchai
 		currentHash := startHash
 		for {
 			block, err := chain.GetBlock(currentHash)
-			utils.ErrorHandle(err)
+			if err != nil {
+				return nil, err
+			}
 
 			blocks = append(blocks, &block)
 
@@ -326,9 +390,15 @@ func (cli *CommandLine) GetBlockChain(startHash []byte, max uint16) []*blockchai
 		}
 
 	} else {
-		iter := chain.Iterator()
+		iter, err := chain.Iterator()
+		if err != nil {
+			return nil, err
+		}
 		for {
-			block := iter.Next()
+			block, err := iter.Next()
+			if err != nil {
+				return blocks, nil
+			}
 
 			blocks = append(blocks, block)
 
@@ -338,42 +408,62 @@ func (cli *CommandLine) GetBlockChain(startHash []byte, max uint16) []*blockchai
 		}
 	}
 
-	return blocks
+	return blocks, nil
 
 }
 
-func (cli *CommandLine) GetBlockByHeight(height int64) blockchain.Block {
-	var block blockchain.Block
-	chain := cli.Blockchain.ContinueBlockchain()
+func (cli *CommandLine) GetBlockByHeight(height int64) (*blockchain.Block, error) {
+	var block *blockchain.Block
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		return nil, err
+	}
+
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
 	}
 
-	iter := chain.Iterator()
+	iter, err := chain.Iterator()
+	if err != nil {
+		return nil, err
+	}
 	for {
-		block := *iter.Next()
+		block, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
 		if block.Height == height {
-			return block
+			return block, nil
 		}
 		if len(block.PrevHash) == 0 {
 			break
 		}
 	}
 
-	return block
+	return block, nil
 }
 
-func (cli *CommandLine) GetBlocksByHeightRange(height, max int64) []*blockchain.Block {
+func (cli *CommandLine) GetBlocksByHeightRange(height, max int64) ([]*blockchain.Block, error) {
 	var blocks []*blockchain.Block
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		return nil, err
+	}
+
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
 	}
 
-	iter := chain.Iterator()
+	iter, err := chain.Iterator()
+	if err != nil {
+		return nil, err
+	}
 
 	for {
-		block := iter.Next()
+		block, err := iter.Next()
+		if err != nil {
+			return blocks, nil
+		}
 
 		blocks = append(blocks, block)
 
@@ -386,11 +476,17 @@ func (cli *CommandLine) GetBlocksByHeightRange(height, max int64) []*blockchain.
 		}
 	}
 
-	return blocks
+	return blocks, nil
 }
 
 func (cli *CommandLine) GetBlockByHash(hash []byte) GetBlockResponse {
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, e := cli.Blockchain.ContinueBlockchain()
+	if e != nil {
+		log.Error(e)
+		return GetBlockResponse{
+			Error: err.ErrInternal("Internal error"),
+		}
+	}
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
 	}
@@ -414,12 +510,27 @@ func (cli *CommandLine) GetBlockByHash(hash []byte) GetBlockResponse {
 }
 
 func (cli *CommandLine) GetAllUTXOs() *GetAllUTXOsResponse {
-	chain := cli.Blockchain.ContinueBlockchain()
+	chain, e := cli.Blockchain.ContinueBlockchain()
+	if e != nil {
+		log.Error(e)
+		return &GetAllUTXOsResponse{
+			Error: err.ErrInternal("Internal error"),
+		}
+	}
 	if cli.CloseDbAlways {
 		defer chain.Database.Close()
 	}
 
-	txOutputs := chain.FindUTXO()
+	txOutputs, e := chain.FindUTXO()
+	if e != nil {
+		return &GetAllUTXOsResponse{
+			Message: "Successfully",
+			Error: &err.RPCError{
+				Code:    blockchain.HALVING_INTERVAL,
+				Message: "Please try again.",
+			},
+		}
+	}
 
 	return &GetAllUTXOsResponse{
 		Message: "Successfully",

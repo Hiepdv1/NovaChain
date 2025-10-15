@@ -24,6 +24,9 @@ func (r *AppLogRoutes) InitRoutes(router fiber.Router) {
 }
 
 func (r *AppLogRoutes) RegisterPrivate(router fiber.Router) {
-	r.appLogGroup.Get("/error", middlewares.ValidateQuery[dto.PaginationQuery](), r.handler.GetLogError)
+	r.appLogGroup.Get("/error",
+		middlewares.ValidateQuery[dto.PaginationQuery](false),
+		r.handler.GetLogError,
+	)
 	r.appLogGroup.Get("/:trace_id", r.handler.GetLogByTraceID)
 }

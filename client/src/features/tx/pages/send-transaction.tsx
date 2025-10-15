@@ -33,7 +33,12 @@ import TransactionPreview from '../components/transaction-preview';
 import NetworkStatus from '../components/network-status';
 import { useModalStore } from '@/stores/modal-store';
 import { StoredWallet } from '@/shared/types/wallet';
-import { CreateNewTXPayload, Transaction } from '../types/transaction';
+import {
+  CreateNewTXPayload,
+  ResCreateNewTransaction,
+} from '../types/transaction';
+import { useTransactionPending } from '../hook/useTransactionQuery';
+import TransactionPending from '../components/tx-pending';
 
 type RefMap = {
   btnVerify: HTMLButtonElement | null;
@@ -94,6 +99,11 @@ const SendTransactionPage = () => {
   const [currentFee, setCurrentFee] = useState<FeeOption>(
     FeeList.find((f) => f.checked)!,
   );
+  const {
+    data: txPendings,
+    isLoading: isLoadingTxPending,
+    error: errorPending,
+  } = useTransactionPending({});
 
   const onCheckedFee = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
@@ -126,7 +136,7 @@ const SendTransactionPage = () => {
     const value = inputRecipient.value;
 
     if (ValidateAddress(value)) {
-      if (value.trim() === wallet.data.Address.trim()) {
+      if (value.trim() === wallet.data.Address.String.trim()) {
         setValidate((prev) => {
           return {
             ...prev,
@@ -275,7 +285,7 @@ const SendTransactionPage = () => {
   const onConfirmPassword = (
     w: StoredWallet,
     privKey: string,
-    data: Transaction,
+    data: ResCreateNewTransaction,
     ...args: any
   ) => {
     const payload = args[0] as CreateNewTXPayload;
@@ -284,11 +294,13 @@ const SendTransactionPage = () => {
       props: {
         amount: payload.data.amount,
         fee: payload.data.fee,
+        priority: payload.data.priority,
         message: payload.data.message,
         to: payload.data.to,
         from: w.address,
         balance: parseFloat(wallet?.data?.Balance || '0'),
-        transactions: data,
+        transaction: data,
+        privateKey: privKey,
       },
     });
   };
@@ -324,6 +336,7 @@ const SendTransactionPage = () => {
           timestamp: Math.floor(Date.now() / 1000),
           to: inputRecipient.value,
           message: data.message,
+          priority: fee.priority,
         },
       },
     });
@@ -390,8 +403,18 @@ const SendTransactionPage = () => {
     }
   }, [wallet, router]);
 
-  if (!wallet || !wallet.data) {
+  if (
+    !wallet ||
+    !wallet.data ||
+    isLoadingTxPending ||
+    !txPendings ||
+    errorPending
+  ) {
     return <ContentLoading />;
+  }
+
+  if (txPendings.data && txPendings.data.length > 0) {
+    return <TransactionPending {...txPendings.data[0]} />;
   }
 
   return (
@@ -495,7 +518,7 @@ const SendTransactionPage = () => {
                     name="fromAddr"
                     id="fromAddr"
                     disabled
-                    value={wallet?.data?.Address}
+                    value={wallet?.data?.Address.String}
                   />
 
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -868,7 +891,7 @@ const SendTransactionPage = () => {
                 : ''
             }
             active={validate.recipientAddr.valid && validate.amount.valid}
-            fromAddr={wallet.data.Address.trim()}
+            fromAddr={wallet.data.Address.String.trim()}
             data={{
               amount: validate.amount.value,
               fee: currentFee.fee,

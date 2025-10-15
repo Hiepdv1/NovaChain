@@ -11,6 +11,7 @@ export interface FeeOption {
   fee: number;
   value: FeeoptionType;
   color: string;
+  priority: number;
   checked: boolean;
 }
 
@@ -22,6 +23,7 @@ export const FeeList: FeeOption[] = [
     fee: 0.1,
     value: 'slow',
     color: 'bg-yellow-500',
+    priority: 0,
     checked: false,
   },
   {
@@ -31,6 +33,7 @@ export const FeeList: FeeOption[] = [
     fee: 0.5,
     value: 'standard',
     color: 'bg-blue-500',
+    priority: 1,
     checked: true,
   },
   {
@@ -40,6 +43,7 @@ export const FeeList: FeeOption[] = [
     fee: 0.9,
     value: 'fast',
     color: 'bg-green-500',
+    priority: 2,
     checked: false,
   },
 ];

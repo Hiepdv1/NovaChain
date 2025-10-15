@@ -89,4 +89,71 @@ func (r *dbChainRepository) ExistingBlock(ctx context.Context, hash string, tx *
 	return q.IsExistingBlock(ctx, hash)
 }
 
-// func (r *dbChainRepository) FindUTXO()
+func (r *dbChainRepository) GetBestHeight(ctx context.Context, tx *sql.Tx) (int64, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetBestHeight(ctx)
+}
+
+func (r *dbChainRepository) GetBlockCountByHours(ctx context.Context, hours int64, tx *sql.Tx) (int64, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetBlockCountByHours(ctx, hours)
+}
+
+func (r *dbChainRepository) GetListBlockByHours(ctx context.Context, hours int64, tx *sql.Tx) ([]dbchain.Block, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetListBlockByHours(ctx, hours)
+}
+
+func (r *dbChainRepository) CountDistinctMiners(ctx context.Context, tx *sql.Tx) (int64, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.CountDistinctMiners(ctx)
+}
+
+func (r *dbChainRepository) GetCountTodayWorkerMiners(ctx context.Context, tx *sql.Tx) (int64, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.GetCountTodayWorkerMiners(ctx)
+}
+
+func (r *dbChainRepository) SearchExact(ctx context.Context, content string) ([]dbchain.SearchExactRow, error) {
+
+	return r.queries.SearchExact(ctx, content)
+
+}
+
+func (r *dbChainRepository) SearchFuzzy(ctx context.Context, arg dbchain.SearchFuzzyParams) ([]dbchain.SearchFuzzyRow, error) {
+
+	return r.queries.SearchFuzzy(ctx, arg)
+}
+
+func (r *dbChainRepository) CountFuzzy(ctx context.Context, content string) (int64, error) {
+	return r.queries.CountFuzzy(ctx, content)
+}
+
+func (r *dbChainRepository) CountFuzzyByType(ctx context.Context, content string) ([]dbchain.CountFuzzyByTypeRow, error) {
+	return r.queries.CountFuzzyByType(ctx, content)
+}

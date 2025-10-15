@@ -53,7 +53,10 @@ Example:
 				InstanceId = fmt.Sprintf("%d", time.Now().Unix())
 				log.Infof("No instance ID provided, Generated default ID: %s", InstanceId)
 			}
-			cli := cli.UpdateInstance(InstanceId, true)
+			cli, err := cli.UpdateInstance(InstanceId, false)
+			if err != nil {
+				log.Error(err)
+			}
 			cli.CreateBlockchain()
 			log.Infof("✅ Blockchain initialized successfully with instance ID: %s", InstanceId)
 			cli.Blockchain.Database.Close()
@@ -109,7 +112,10 @@ Example:
 `,
 		Args: cobra.MinimumNArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			cli := cli.UpdateInstance(InstanceId, true)
+			cli, err := cli.UpdateInstance(InstanceId, true)
+			if err != nil {
+				log.Error(err)
+			}
 			cli.GetBalance(address)
 		},
 	}
@@ -131,7 +137,10 @@ Example:
 Should be run when UTXOs are out-of-sync or after data corruption recovery.`,
 		Args: cobra.MinimumNArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			cli := cli.UpdateInstance(InstanceId, true)
+			cli, err := cli.UpdateInstance(InstanceId, false)
+			if err != nil {
+				log.Error(err)
+			}
 			cli.ComputeUTXOs()
 		},
 	}
@@ -145,8 +154,43 @@ Should be run when UTXOs are out-of-sync or after data corruption recovery.`,
 		Long:  `Display all blocks stored in the blockchain, including transactions and metadata.`,
 		Args:  cobra.MinimumNArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			cli := cli.UpdateInstance(InstanceId, true)
+			if InstanceId == "" {
+				fmt.Print("Instance Required")
+			}
+
+			cli, err := cli.UpdateInstance(InstanceId, true)
+			if err != nil {
+				log.Error(err)
+			}
 			cli.PrintBlockchain()
+		},
+	}
+
+	var utxosCmd = &cobra.Command{
+		Use:  "utxos",
+		Args: cobra.MinimumNArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			cli, err := cli.UpdateInstance(InstanceId, true)
+			if err != nil {
+				log.Error(err)
+			}
+			cli.PrintUtxos()
+		},
+	}
+
+	var bestChainCmd = &cobra.Command{
+		Use:  "best-chain",
+		Args: cobra.MinimumNArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			if InstanceId == "" {
+				fmt.Print("Instance Required")
+			}
+
+			cli, err := cli.UpdateInstance(InstanceId, true)
+			if err != nil {
+				log.Error(err)
+			}
+			cli.PrintBestChain()
 		},
 	}
 
@@ -189,19 +233,21 @@ Example:
 `,
 		Args: cobra.MinimumNArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
+			cli, err := cli.UpdateInstance(InstanceId, false)
+			if err != nil {
+				log.Error(err)
+			}
 			if miner && len(minerAddress) == 0 {
 				log.Fatal("Miner address is required when starting a miner node")
 			}
 
-			if miner {
-				log.Infoln("⛏️  Miner mode: ", miner)
-			}
+			log.Infof("🔧 Starting node with instanceId: %s on port: %s\n", InstanceId, listenPort)
 
-			fmt.Printf("🔧 Starting node with instanceId: %s on port: %s\n", InstanceId, listenPort)
-			cli := cli.UpdateInstance(InstanceId, false)
 			cli.StartNode(listenPort, minerAddress, miner, fullNode, func(net *p2p.Network) {
-				log.Infoln("✅ Node started successfully and joined the network")
-
+				log.Info("✅ Node started successfully and joined the network")
+				if miner {
+					log.Info("⛏️ Miner mode")
+				}
 				if rpc {
 					cli.P2P = net
 					go jsonrpc.StartServer(cli, rpc, rpcPort, rpcAddress, rpcMode)
@@ -300,9 +346,11 @@ Example Usage:
 		initCmd,
 		walletCmd,
 		computeUtxosCmd,
+		utxosCmd,
 		sendCmd,
 		printCmd,
 		nodeCmd,
+		bestChainCmd,
 	)
 
 	rootCmd.Execute()

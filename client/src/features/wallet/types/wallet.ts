@@ -1,5 +1,4 @@
 import { NullTime } from '@/shared/types/api';
-import { QueryKey, UseQueryOptions } from '@tanstack/react-query';
 
 export interface WalletConnectData {
   timestamp: number;
@@ -15,18 +14,19 @@ export interface WalletConnectPayload {
 
 export interface Wallet {
   ID: string;
-  Address: string;
-  PublicKey: string;
+  Address: {
+    String: string;
+    Valid: boolean;
+  };
+  PublicKey: {
+    String: string;
+    Valid: boolean;
+  };
   PublicKeyHash: string;
   Balance: string;
   CreateAt: NullTime;
   LastLogin: NullTime;
 }
-
-export type WalletQueryOptions = Omit<
-  UseQueryOptions<Wallet, Error, Wallet, QueryKey>,
-  'queryKey' | 'queryFn'
->;
 
 export interface WalletSignaturePayload {
   nonce: string;

@@ -10,6 +10,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type ChainService struct {
@@ -33,13 +36,13 @@ func NewChainService(
 func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.Block, *response.PaginationMeta, *apperror.AppError) {
 	ctx := context.Background()
 
-	limit := int32(*dto.Limit)
-	page := int32(*dto.Page)
-	offset := (page - 1) * limit
+	limit := *dto.Limit
+	page := *dto.Page
+	offset := int32((page - 1)) * int32(limit)
 
 	blocks, err := s.dbRepo.GetListBlock(ctx, dbchain.GetListBlocksParams{
 		Offset: offset,
-		Limit:  limit,
+		Limit:  int32(limit),
 	}, nil)
 
 	if err != nil {
@@ -61,9 +64,52 @@ func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.Block, *res
 	pagination := helpers.BuildPaginationMeta(
 		limit,
 		page,
-		int32(lastestBlock.Height),
+		lastestBlock.Height,
 		nil,
 	)
 
 	return blocks, pagination, nil
+}
+
+func (s *ChainService) GetSearchResult(dto *GetSearchResultDto) ([]dbchain.SearchFuzzyRow, *response.PaginationMeta, *apperror.AppError) {
+
+	ctx := context.Background()
+
+	limit := int32(*dto.Limit)
+	page := int32(*dto.Page)
+
+	offset := limit * (page - 1)
+
+	searchQuery := strings.TrimSpace(dto.Search_Query)
+
+	total, err := s.dbRepo.CountFuzzy(ctx, searchQuery)
+	if err != nil {
+		log.Errorf("[Search-Fizzy] Content %s error %v", dto.Search_Query, err)
+		return nil, nil, apperror.Internal("Something went wrong. Please try again!", nil)
+	}
+
+	resultFizzy, err := s.dbRepo.SearchFuzzy(ctx, dbchain.SearchFuzzyParams{
+		SearchQuery: searchQuery,
+		Offset:      offset,
+		Limit:       limit,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, apperror.NotFound("Not found", nil)
+		}
+
+		log.Errorf("[Search-Fizzy] Content %s error %v", dto.Search_Query, err)
+		return nil, nil, apperror.Internal("Something went wrong. Please try again!", nil)
+
+	}
+
+	pagination := helpers.BuildPaginationMeta(
+		int64(limit),
+		int64(page),
+		total,
+		nil,
+	)
+
+	return resultFizzy, pagination, nil
+
 }

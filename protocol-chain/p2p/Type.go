@@ -8,44 +8,74 @@ import (
 
 type Network struct {
 	Host             host.Host
-	GeneralChannel   *Channel
 	MiningChannel    *Channel
 	FullNodesChannel *Channel
 	Blockchain       *blockchain.Blockchain
 	Blocks           chan *blockchain.Block
-	Transactions     chan *blockchain.Transaction
+	Transactions     chan []*blockchain.Transaction
 	Miner            bool
 
+	IsMining                   bool
 	competingBlockChan         chan *blockchain.Block
-	blockProcessingLimiter     chan struct{}
-	txProcessingLimiter        chan struct{}
 	peersSyncedWithLocalHeight []string
 	syncCompleted              bool
-	isSynced                   chan struct{}
+
+	// cache block/transaction - Gossip
+	Gossip      *GossipManager
+	syncManager *SyncManager
+
+	worker *Worker[*ChannelContent]
+}
+
+type NetHeadersData struct {
+	Height   int64
+	PrevHash []byte
+	Hash     []byte
+	Nbits    uint32
+}
+
+type NetHeaders struct {
+	SendFrom   string
+	BestHeight int64
+	Data       []NetHeadersData
+}
+
+type NetBlockSync struct {
+	SendFrom   string
+	BestHeight int64
+	Blocks     []blockchain.Block
 }
 
 type NetHeader struct {
-	Version    int64
-	BestHeight int64
-	Hash       []byte
-	SendFrom   string
-	isSynced   bool
+	Hash     []byte
+	Height   int64
+	PrevHash []byte
+	SendFrom string
 }
 
-type NetGetBlockHeader struct {
+type NetHeaderLocator struct {
+	SendFrom string
+	Locator  [][]byte
+}
+
+type NetGetDataSync struct {
+	SendFrom string
+	Hashes   [][]byte
+}
+
+type NetGetData struct {
 	SendFrom string
 	Height   int64
 	Hash     []byte
 }
 
-type NetBlock struct {
-	SendFrom string
-	Blocks   [][]byte
+type NetTxMining struct {
+	Txs []blockchain.Transaction
 }
 
-type NetTx struct {
-	SendFrom     string
-	Transactions [][]byte
+type NetBlock struct {
+	SendFrom string
+	Block    []byte
 }
 
 type TxFromPool struct {
@@ -53,14 +83,23 @@ type TxFromPool struct {
 	Count    int64
 }
 
-type NetInventory struct {
-	SendFrom string
-	Type     string
-	Items    [][]byte
+type NetTx struct {
+	SendFrom    string
+	Transaction []byte
 }
 
-type NetGetData struct {
+type NetInventoryTxs struct {
 	SendFrom string
-	Type     string
-	Data     [][]byte
+	TxHashes [][]byte
+	Count    uint64
+}
+
+type NetGetDataTransaction struct {
+	SendFrom string
+	TxHashes [][]byte
+}
+
+type NetTransactionData struct {
+	SendFrom     string
+	Transactions []blockchain.Transaction
 }

@@ -4,28 +4,103 @@ export interface TransactionPayload {
   to: string;
   message: string;
   timestamp: number;
+  priority: number;
 }
 
 export interface CreateNewTXPayload {
   data: TransactionPayload;
   sig: string;
-  pubKey: string;
 }
 
 export interface TxInput {
+  ID: string;
+  Out: number;
+  Signature: string | null;
+  PubKey: string;
+}
+
+export interface TxOutput {
+  Value: number;
+  PubKeyHash: string;
+}
+
+export interface Transaction {
+  ID: string;
+  Inputs: TxInput[];
+  Outputs: TxOutput[];
+}
+
+export interface SendTransactionData {
+  amount: number;
+  fee: number;
+  transaction: Transaction;
+  message: string;
+  receiverAddress: string;
+  priority: number;
+}
+
+export interface SendTransactionPayload {
+  data: SendTransactionData;
+  sig: string;
+}
+
+export interface TxInputWithDataToSign {
   id: string;
   out: number;
   signature: string | null;
   pubKey: string;
+  dataToSign: string;
 }
 
-export interface TxOutput {
-  value: number;
-  pubKeyHash: string;
+export interface UTXO {
+  ID: string;
+  TxID: {
+    String: string;
+    Valid: boolean;
+  };
+  OutputIndex: number;
+  Value: string;
+  PubKeyHash: string;
+  BlockID: string;
 }
 
-export interface Transaction {
+export interface ResCreateNewTransaction {
   id: string;
-  inputs: TxInput[];
+  inputs: TxInputWithDataToSign[];
   outputs: TxOutput[];
+}
+
+export interface TransactionData {
+  RawTx: {
+    id: string;
+    inputs: TxInput[];
+    outputs: TxOutput[];
+  };
+  PubKeyHash: string;
+}
+
+export interface TransactionPending extends TransactionData {
+  ID: string;
+  TxID: string;
+  Address: string;
+  ReceiverAddress: string;
+  Amount: string;
+  Fee: string;
+  Status: 'pending' | 'mining';
+  Priority: {
+    Int32: number;
+    Valid: boolean;
+  };
+  Message: {
+    String: string;
+    Valid: boolean;
+  };
+  CreatedAt: {
+    Time: string;
+    Valid: boolean;
+  };
+  UpdatedAt: {
+    Time: string;
+    Valid: boolean;
+  };
 }

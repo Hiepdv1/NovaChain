@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"ChainServer/internal/common/helpers"
 	"ChainServer/internal/common/utils"
 	"ChainServer/internal/db"
 	dbwallet "ChainServer/internal/db/wallet"
@@ -55,8 +56,8 @@ func (r *WalletDBRepository) GetWalletByPubkey(ctx context.Context, pubkey []byt
 	address := utils.PubKeyToAddress(pubkey)
 
 	args := dbwallet.GetWalletByAddrAndPubkeyParams{
-		Address:   string(address),
-		PublicKey: hex.EncodeToString(pubkey),
+		Address:   helpers.StringToNullString(string(address)),
+		PublicKey: helpers.StringToNullString(hex.EncodeToString(pubkey)),
 	}
 
 	wallet, err := q.GetWalletByAddrAndPubkey(ctx, args)
@@ -133,8 +134,8 @@ func (r *WalletDBRepository) ExistsWalletByPubKey(ctx context.Context, pubkey []
 	addr := utils.PubKeyToAddress(pubkey)
 
 	exists, err := q.ExistsWalletByAddrAndPubkey(ctx, dbwallet.ExistsWalletByAddrAndPubkeyParams{
-		Address:   string(addr),
-		PublicKey: hex.EncodeToString(pubkey),
+		Address:   helpers.StringToNullString(string(addr)),
+		PublicKey: helpers.StringToNullString(hex.EncodeToString(pubkey)),
 	})
 
 	if err != nil {
