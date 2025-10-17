@@ -1,6 +1,8 @@
 'use client';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
 
 interface NavLink {
   id: number;
@@ -20,7 +22,7 @@ const NavList: NavLink[] = [
     id: 2,
     title: 'Blocks',
     to: '/blocks',
-    active: ['/block'],
+    active: ['/blocks', '/blocks/[hash]'],
   },
   {
     id: 3,
@@ -45,23 +47,43 @@ const NavList: NavLink[] = [
 const NavBar = () => {
   const pathname = usePathname();
 
-  return (
-    <div className="overflow-x-auto scrollbar-hide mb-8 select-none glass-card dark:border-white/5 dark:bg-transparent dark:!bg-[linear-gradient(135deg,_rgba(255,255,255,0.1)_0%,_rgba(255,255,255,0.05)_100%)] p-1 rounded-xl">
-      <nav aria-label="Main navigation" className="flex gap-x-1">
-        {NavList.map((navItem) => {
-          const isActive = navItem.active.includes(pathname);
+  const isMatch = (pathname: string, activeList: string[]) => {
+    return activeList.some((pattern) => {
+      if (pattern.includes('[')) {
+        const base = pattern.split('/[')[0];
+        return pathname.startsWith(base + '/');
+      }
+      return pathname === pattern;
+    });
+  };
 
-          const classActive = isActive
-            ? 'bg-white text-gray-950 dark:bg-gray-700 dark:text-white'
-            : 'dark:hover:text-white';
+  return (
+    <div className="overflow-x-auto scrollbar-hide mb-8 select-none">
+      <nav
+        aria-label="Main navigation"
+        className="relative flex gap-x-2 bg-gradient-to-r from-white/60 to-white/40 dark:from-gray-800/50 dark:to-gray-700/40 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-2 shadow-sm"
+      >
+        {NavList.map((navItem) => {
+          const isActive = isMatch(pathname, navItem.active);
 
           return (
             <Link
-              className={`${classActive} hover:text-gray-950 text-gray-600 dark:text-gray-400 transition-all duration-200 rounded-lg font-medium text-sm px-4 py-3`}
               key={navItem.id}
               href={navItem.to}
+              className={`relative px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 whitespace-nowrap ${
+                isActive
+                  ? 'text-white dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
             >
-              <span>{navItem.title}</span>
+              {isActive && (
+                <motion.div
+                  layoutId="active-pill"
+                  className="absolute inset-0 rounded-xl bg-gradient-primary shadow-md"
+                  transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                />
+              )}
+              <span className="relative z-10">{navItem.title}</span>
             </Link>
           );
         })}

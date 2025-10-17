@@ -44,6 +44,14 @@ func GetLocalQuery[T any](c *fiber.Ctx) (*T, *apperror.AppError) {
 	return &dto, nil
 }
 
+func GetLocalParams[T any](c *fiber.Ctx) (*T, *apperror.AppError) {
+	dto, ok := c.Locals("params").(T)
+	if !ok {
+		return nil, apperror.Internal("params not found in context", nil)
+	}
+	return &dto, nil
+}
+
 func GetLocalRaw[T any](c *fiber.Ctx, localKey string) (*T, *apperror.AppError) {
 	dto, ok := c.Locals(localKey + "_raw").(T)
 	if !ok {

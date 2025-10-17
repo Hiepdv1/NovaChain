@@ -157,3 +157,8 @@ func (r *dbChainRepository) CountFuzzy(ctx context.Context, content string) (int
 func (r *dbChainRepository) CountFuzzyByType(ctx context.Context, content string) ([]dbchain.CountFuzzyByTypeRow, error) {
 	return r.queries.CountFuzzyByType(ctx, content)
 }
+
+func (r *dbChainRepository) GetBlockDetailWithTransactions(ctx context.Context, arg dbchain.GetBlockDetailWithTransactionsParams) (dbchain.GetBlockDetailWithTransactionsRow, error) {
+
+	return r.queries.GetBlockDetailWithTransactions(ctx, arg)
+}

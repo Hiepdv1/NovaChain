@@ -300,3 +300,78 @@ func (s *TransactionService) TransactionPending(payload *utils.JWTPayload[types.
 
 	return txPending, paginationMeta, nil
 }
+
+func (s *TransactionService) SearchTransactions(queries *GetTransactionSearchDto) ([]dbchain.Transaction, *response.PaginationMeta, *apperror.AppError) {
+	ctx := context.Background()
+
+	limit := int32(*queries.Limit)
+	page := int32(*queries.Page)
+
+	if queries.Search_Tx_Query == "" || len(queries.Search_Tx_Query) < 1 {
+		txs, err := s.dbRepo.GetListTransactionByBlockHash(ctx, dbchain.GetListTransactionByBIDParams{
+			BID:    queries.B_Hash,
+			Offset: (page - 1) * limit,
+			Limit:  limit,
+		}, nil)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil, apperror.NotFound("No transactions found matching the search criteria", nil)
+			}
+			log.Errorf("Get list transactions error: %v", err)
+			return nil, nil, apperror.Internal("Failed to search transactions", nil)
+		}
+
+		count, err := s.dbRepo.CountTransactionByBID(ctx, queries.B_Hash, nil)
+		if err != nil {
+			log.Errorf("Count transactions by block hash error: %v", err)
+			return nil, nil, apperror.Internal("Failed to get count of searched transactions", nil)
+		}
+
+		pagination := helpers.BuildPaginationMeta(
+			int64(limit),
+			int64(page),
+			count,
+			queries.NextCursor,
+		)
+
+		return txs, pagination, nil
+	}
+
+	txs, err := s.dbRepo.SearchFuzzyTransactionsByBlock(ctx, dbchain.SearchFuzzyTransactionsByBlockParams{
+		SearchQuery: queries.Search_Tx_Query,
+		BHash:       queries.B_Hash,
+		Limit:       limit,
+		Offset:      (page - 1) * limit,
+	})
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, apperror.NotFound("No transactions found matching the search criteria", nil)
+		}
+		log.Errorf("SearchFuzzyTransactions error: %v", err)
+		return nil, nil, apperror.Internal("Failed to search transactions", nil)
+	}
+
+	if len(txs) == 0 {
+		return nil, nil, apperror.NotFound("No transactions found matching the search criteria", nil)
+	}
+
+	count, err := s.dbRepo.CountFuzzyTransactionsByBlock(ctx, dbchain.CountFuzzyTransactionsByBlockParams{
+		SearchQuery: queries.Search_Tx_Query,
+		BHash:       queries.B_Hash,
+	})
+
+	if err != nil {
+		log.Errorf("CountFuzzyTransactions error: %v", err)
+		return nil, nil, apperror.Internal("Failed to get count of searched transactions", nil)
+	}
+
+	pagination := helpers.BuildPaginationMeta(
+		int64(limit),
+		int64(page),
+		count,
+		queries.NextCursor,
+	)
+
+	return txs, pagination, nil
+}

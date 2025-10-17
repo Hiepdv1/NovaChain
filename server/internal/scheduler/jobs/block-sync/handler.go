@@ -532,7 +532,7 @@ func (j *jobBlockSync) handleReorganization(block *chain.Block, sqlTx *sql.Tx) e
 		}
 		log.Infof("handleReorganization: UTXOs reorganized for rollback block=%s height=%d", blk.BID, blk.Height)
 
-		transactions, err := j.dbTrans.GetListTransactionByBlockHash(ctx, blk.BID, sqlTx)
+		transactions, err := j.dbTrans.GetFullTransactionByBlockHash(ctx, blk.BID, sqlTx)
 		if err != nil {
 			log.Errorf("handleReorganization: Failed to get %d transactions for rollback block=%s height=%d (new block=%s): %v", len(transactions), blk.BID, blk.Height, block.Hash, err)
 			return err

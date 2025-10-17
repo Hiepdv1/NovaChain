@@ -17,8 +17,10 @@ type RpcTransactionRepository interface {
 
 type DbTransactionRepository interface {
 	// ---------------- Chain Transactions ----------------
+	GetFullTransactionByBlockHash(ctx context.Context, b_hash string, tx *sql.Tx) ([]dbchain.Transaction, error)
+	CountTransactionByBID(ctx context.Context, b_id string, tx *sql.Tx) (int64, error)
 	CreateTransaction(ctx context.Context, args dbchain.CreateTransactionParams, tx *sql.Tx) (dbchain.Transaction, error)
-	GetListTransactionByBlockHash(ctx context.Context, bID string, tx *sql.Tx) ([]dbchain.Transaction, error)
+	GetListTransactionByBlockHash(ctx context.Context, arg dbchain.GetListTransactionByBIDParams, tx *sql.Tx) ([]dbchain.Transaction, error)
 	GetListTransaction(ctx context.Context, args dbchain.GetListTransactionsParams, tx *sql.Tx) ([]dbchain.Transaction, error)
 	CreateTxInput(ctx context.Context, args dbchain.CreateTxInputParams, tx *sql.Tx) (dbchain.TxInput, error)
 	CreateTxOutput(ctx context.Context, args dbchain.CreateTxOutputParams, tx *sql.Tx) (dbchain.TxOutput, error)
@@ -31,6 +33,8 @@ type DbTransactionRepository interface {
 	CountTransactions(ctx context.Context, tx *sql.Tx) (int64, error)
 	CountTodayTransaction(ctx context.Context, tx *sql.Tx) (int64, error)
 	GetListFullTransaction(ctx context.Context, arg dbchain.GetListFullTransactionParams, tx *sql.Tx) ([]dbchain.GetListFullTransactionRow, error)
+	SearchFuzzyTransactionsByBlock(ctx context.Context, arg dbchain.SearchFuzzyTransactionsByBlockParams) ([]dbchain.Transaction, error)
+	CountFuzzyTransactionsByBlock(ctx context.Context, arg dbchain.CountFuzzyTransactionsByBlockParams) (int64, error)
 
 	// ---------------- Pending Transactions ----------------
 	CountPendingTxs(ctx context.Context, tx *sql.Tx) (int64, error)

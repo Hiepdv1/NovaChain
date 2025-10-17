@@ -100,6 +100,26 @@ func (q *Queries) CountFuzzyByType(ctx context.Context, bID string) ([]CountFuzz
 	return items, nil
 }
 
+const countFuzzyTransactionsByBlock = `-- name: CountFuzzyTransactionsByBlock :one
+SELECT COUNT(*) AS total_count
+FROM transactions
+WHERE 
+  b_id = $1 AND
+  similarity(tx_id::text, $2) > 0
+`
+
+type CountFuzzyTransactionsByBlockParams struct {
+	BHash       string
+	SearchQuery string
+}
+
+func (q *Queries) CountFuzzyTransactionsByBlock(ctx context.Context, arg CountFuzzyTransactionsByBlockParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFuzzyTransactionsByBlock, arg.BHash, arg.SearchQuery)
+	var total_count int64
+	err := row.Scan(&total_count)
+	return total_count, err
+}
+
 const countTodayTransactions = `-- name: CountTodayTransactions :one
 select COUNT(*) from transactions
 where create_at >= EXTRACT(EPOCH FROM date_trunc('day', now()))
@@ -108,6 +128,17 @@ and create_at < EXTRACT(EPOCH FROM date_trunc('day', now()) + INTERVAL '1 day')
 
 func (q *Queries) CountTodayTransactions(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countTodayTransactions)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTransactionByBID = `-- name: CountTransactionByBID :one
+select COUNT(*) from transactions where b_id = $1
+`
+
+func (q *Queries) CountTransactionByBID(ctx context.Context, bID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTransactionByBID, bID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -435,6 +466,96 @@ func (q *Queries) GetBlockCountByHours(ctx context.Context, hours int64) (int64,
 	return count, err
 }
 
+const getBlockDetailWithTransactions = `-- name: GetBlockDetailWithTransactions :one
+SELECT 
+  b.id, b.b_id, b.prev_hash, b.nonce, b.height, b.merkle_root, b.nbits, b.tx_count, b.nchain_work, b.size, b.timestamp,
+  (
+    SELECT jsonb_agg(tx_row)
+    FROM (
+      SELECT jsonb_build_object(
+        'ID', tx.id,
+        'BID', tx.b_id,
+        'TxID', tx.tx_id,
+        'Fromhash', tx.fromHash,
+        'Tohash', tx.toHash,
+        'Amount', tx.amount,
+        'Fee', tx.fee,
+        'CreateAt', tx.create_at
+      ) AS tx_row
+      FROM transactions tx
+      WHERE tx.b_id = b.b_id
+      ORDER BY tx.create_at DESC
+      OFFSET $2
+      LIMIT $3
+    ) sub
+  ) AS transactions,
+
+  (
+    SELECT COALESCE(SUM(tx.fee), 0)
+    FROM transactions tx
+    WHERE tx.b_id = b.b_id
+  ) AS total_fee,
+
+  (
+    SELECT COALESCE(o.pub_key_hash, 'Unknown') 
+    FROM tx_inputs i
+    JOIN tx_outputs o 
+      ON o.b_id = b.b_id 
+     AND o.b_id = i.b_id
+    WHERE i.out_index = -1
+    LIMIT 1
+  ) AS miner
+
+FROM blocks b
+WHERE b.b_id = $1
+LIMIT 1
+`
+
+type GetBlockDetailWithTransactionsParams struct {
+	BID      string
+	OffsetTx int32
+	LimitTx  int32
+}
+
+type GetBlockDetailWithTransactionsRow struct {
+	ID           uuid.UUID
+	BID          string
+	PrevHash     sql.NullString
+	Nonce        int64
+	Height       int64
+	MerkleRoot   string
+	Nbits        int64
+	TxCount      int64
+	NchainWork   string
+	Size         float64
+	Timestamp    int64
+	Transactions json.RawMessage
+	TotalFee     interface{}
+	Miner        string
+}
+
+func (q *Queries) GetBlockDetailWithTransactions(ctx context.Context, arg GetBlockDetailWithTransactionsParams) (GetBlockDetailWithTransactionsRow, error) {
+	row := q.db.QueryRowContext(ctx, getBlockDetailWithTransactions, arg.BID, arg.OffsetTx, arg.LimitTx)
+	var i GetBlockDetailWithTransactionsRow
+	err := row.Scan(
+		&i.ID,
+		&i.BID,
+		&i.PrevHash,
+		&i.Nonce,
+		&i.Height,
+		&i.MerkleRoot,
+		&i.Nbits,
+		&i.TxCount,
+		&i.NchainWork,
+		&i.Size,
+		&i.Timestamp,
+		&i.Transactions,
+		&i.TotalFee,
+		&i.Miner,
+	)
+	return i, err
+}
+
 const getCountTodayWorkerMiners = `-- name: GetCountTodayWorkerMiners :one
 SELECT COUNT(DISTINCT o.pub_key_hash) AS total_miners
 FROM blocks b
@@ -464,6 +585,42 @@ func (q *Queries) GetCountTransaction(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getFullTransactionByBID = `-- name: GetFullTransactionByBID :many
+select id, tx_id, b_id, create_at, amount, fee, fromhash, tohash FROM transactions where b_id = $1
+`
+
+func (q *Queries) GetFullTransactionByBID(ctx context.Context, bID string) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, getFullTransactionByBID, bID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transaction
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.TxID,
+			&i.BID,
+			&i.CreateAt,
+			&i.Amount,
+			&i.Fee,
+			&i.Fromhash,
+			&i.Tohash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getLastBlock = `-- name: GetLastBlock :one
@@ -687,11 +844,20 @@ func (q *Queries) GetListFullTransaction(ctx context.Context, arg GetListFullTra
 }
 
 const getListTransactionByBID = `-- name: GetListTransactionByBID :many
-select id, tx_id, b_id, create_at, amount, fee, fromhash, tohash from transactions where b_id = $1
+select id, tx_id, b_id, create_at, amount, fee, fromhash, tohash from transactions 
+where b_id = $1
+OFFSET $2
+LIMIT $3
 `
 
-func (q *Queries) GetListTransactionByBID(ctx context.Context, bID string) ([]Transaction, error) {
-	rows, err := q.db.QueryContext(ctx, getListTransactionByBID, bID)
+type GetListTransactionByBIDParams struct {
+	BID    string
+	Offset int32
+	Limit  int32
+}
+
+func (q *Queries) GetListTransactionByBID(ctx context.Context, arg GetListTransactionByBIDParams) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, getListTransactionByBID, arg.BID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1059,6 +1225,63 @@ func (q *Queries) SearchFuzzy(ctx context.Context, arg SearchFuzzyParams) ([]Sea
 	for rows.Next() {
 		var i SearchFuzzyRow
 		if err := rows.Scan(&i.Type, &i.Keyword, &i.Data); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchFuzzyTransactionsByBlock = `-- name: SearchFuzzyTransactionsByBlock :many
+SELECT 
+  id, tx_id, b_id, create_at, amount, fee, fromhash, tohash
+FROM transactions
+WHERE 
+  b_id = $3 AND
+  similarity(tx_id::text, $4) > 0
+ORDER BY 
+  similarity(tx_id::text, $4) DESC
+OFFSET $1
+LIMIT $2
+`
+
+type SearchFuzzyTransactionsByBlockParams struct {
+	Offset      int32
+	Limit       int32
+	BHash       string
+	SearchQuery string
+}
+
+func (q *Queries) SearchFuzzyTransactionsByBlock(ctx context.Context, arg SearchFuzzyTransactionsByBlockParams) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, searchFuzzyTransactionsByBlock,
+		arg.Offset,
+		arg.Limit,
+		arg.BHash,
+		arg.SearchQuery,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transaction
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.TxID,
+			&i.BID,
+			&i.CreateAt,
+			&i.Amount,
+			&i.Fee,
+			&i.Fromhash,
+			&i.Tohash,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

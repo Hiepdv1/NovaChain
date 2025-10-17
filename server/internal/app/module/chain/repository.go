@@ -29,4 +29,5 @@ type DBChainRepository interface {
 	DeleteBlockByHash(ctx context.Context, hash string, tx *sql.Tx) error
 	GetListBlock(ctx context.Context, args dbchain.GetListBlocksParams, tx *sql.Tx) ([]dbchain.Block, error)
 	ExistingBlock(ctx context.Context, hash string, tx *sql.Tx) (bool, error)
+	GetBlockDetailWithTransactions(ctx context.Context, arg dbchain.GetBlockDetailWithTransactionsParams) (dbchain.GetBlockDetailWithTransactionsRow, error)
 }

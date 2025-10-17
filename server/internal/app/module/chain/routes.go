@@ -33,9 +33,14 @@ func (r *ChainRoutes) RegisterPublic(router fiber.Router) {
 		r.handler.GetBlocks,
 	)
 
+	r.chainGroup.Get("/blocks/:blockHash",
+		middlewares.ValidateParams[GetBlockDetailParamDto](false),
+		middlewares.ValidateQuery[dto.PaginationQuery](false),
+		r.handler.GetBlockDetail,
+	)
+
 	r.chainGroup.Get("/search",
 		middlewares.ValidateQuery[GetSearchResultDto](false),
 		r.handler.GetSearchResult,
 	)
-
 }

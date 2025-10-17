@@ -87,6 +87,51 @@ ORDER BY score DESC
 OFFSET $1
 LIMIT $2;
 
+-- name: GetBlockDetailWithTransactions :one
+SELECT 
+  b.*,
+  (
+    SELECT jsonb_agg(tx_row)
+    FROM (
+      SELECT jsonb_build_object(
+        'ID', tx.id,
+        'BID', tx.b_id,
+        'TxID', tx.tx_id,
+        'Fromhash', tx.fromHash,
+        'Tohash', tx.toHash,
+        'Amount', tx.amount,
+        'Fee', tx.fee,
+        'CreateAt', tx.create_at
+      ) AS tx_row
+      FROM transactions tx
+      WHERE tx.b_id = b.b_id
+      ORDER BY tx.create_at DESC
+      OFFSET sqlc.arg('offsetTx')
+      LIMIT sqlc.arg('limitTx')
+    ) sub
+  ) AS transactions,
+
+  (
+    SELECT COALESCE(SUM(tx.fee), 0)
+    FROM transactions tx
+    WHERE tx.b_id = b.b_id
+  ) AS total_fee,
+
+  (
+    SELECT COALESCE(o.pub_key_hash, 'Unknown') 
+    FROM tx_inputs i
+    JOIN tx_outputs o 
+      ON o.b_id = b.b_id 
+     AND o.b_id = i.b_id
+    WHERE i.out_index = -1
+    LIMIT 1
+  ) AS miner
+
+FROM blocks b
+WHERE b.b_id = $1
+LIMIT 1;
+
+
 -- name: CountFuzzy :one
 SELECT COUNT(*) AS total_count
 FROM (
@@ -164,11 +209,39 @@ values ($1, $2, $3, $4, $5, $6, $7) returning *;
 -- name: GetCountTransaction :one
 SELECT COUNT(*) FROM transactions;
 
+-- name: SearchFuzzyTransactionsByBlock :many
+SELECT 
+  *
+FROM transactions
+WHERE 
+  b_id = sqlc.arg('b_hash') AND
+  similarity(tx_id::text, sqlc.arg('searchQuery')) > 0
+ORDER BY 
+  similarity(tx_id::text, sqlc.arg('searchQuery')) DESC
+OFFSET $1
+LIMIT $2;
+
+-- name: CountFuzzyTransactionsByBlock :one
+SELECT COUNT(*) AS total_count
+FROM transactions
+WHERE 
+  b_id = sqlc.arg('b_hash') AND
+  similarity(tx_id::text, sqlc.arg('searchQuery')) > 0;
+
 -- name: GetTransactionByTxID :one
 select * from transactions where tx_id = $1 limit 1;
 
 -- name: GetListTransactionByBID :many
-select * from transactions where b_id = $1;
+select * from transactions 
+where b_id = $1
+OFFSET $2
+LIMIT $3;
+
+-- name: GetFullTransactionByBID :many
+select * FROM transactions where b_id = $1;
+
+-- name: CountTransactionByBID :one
+select COUNT(*) from transactions where b_id = $1;
 
 -- name: GetListTransactions :many
 select * from transactions

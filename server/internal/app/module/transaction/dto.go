@@ -144,3 +144,9 @@ func (tx *NewTransactionDto) ValidateAndParse() (any, error) {
 
 	return parsed, nil
 }
+
+type GetTransactionSearchDto struct {
+	B_Hash          string `query:"b_hash" validate:"required,hexadecimal,len=64"`
+	Search_Tx_Query string `query:"q" validate:"omitempty"`
+	dto.PaginationQuery
+}

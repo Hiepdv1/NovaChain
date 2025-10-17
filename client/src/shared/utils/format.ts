@@ -2,6 +2,14 @@ export const FormatHash = (hash: string) => {
   return `${hash.slice(0, 4)}...${hash.slice(-4)}`;
 };
 
+export const TruncateHash = (hash: string, start = 10, end = 8) => {
+  if (hash === '') {
+    return '';
+  }
+
+  return `${hash.slice(0, start)}...${hash.slice(-end)}`;
+};
+
 export const FormatTimestamp = (timestamp: number): string => {
   const now = Date.now();
 

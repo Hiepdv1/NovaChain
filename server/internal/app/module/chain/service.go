@@ -6,9 +6,11 @@ import (
 	"ChainServer/internal/common/dto"
 	"ChainServer/internal/common/helpers"
 	"ChainServer/internal/common/response"
+	"ChainServer/internal/common/utils"
 	dbchain "ChainServer/internal/db/chain"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -100,7 +102,6 @@ func (s *ChainService) GetSearchResult(dto *GetSearchResultDto) ([]dbchain.Searc
 
 		log.Errorf("[Search-Fizzy] Content %s error %v", dto.Search_Query, err)
 		return nil, nil, apperror.Internal("Something went wrong. Please try again!", nil)
-
 	}
 
 	pagination := helpers.BuildPaginationMeta(
@@ -112,4 +113,61 @@ func (s *ChainService) GetSearchResult(dto *GetSearchResultDto) ([]dbchain.Searc
 
 	return resultFizzy, pagination, nil
 
+}
+
+func (s *ChainService) GetBlockDetail(dto *GetBlockDetailDto) (BlockDetail, *apperror.AppError) {
+	ctx := context.Background()
+
+	limit := int32(*dto.Limit)
+	page := int32(*dto.Page)
+
+	offsetTx := limit * (page - 1)
+
+	block, err := s.dbRepo.GetBlockDetailWithTransactions(ctx, dbchain.GetBlockDetailWithTransactionsParams{
+		BID:      dto.BlockHash,
+		OffsetTx: offsetTx,
+		LimitTx:  limit,
+	})
+
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return BlockDetail{}, apperror.Internal("Failed to get block detail", err)
+		}
+		return BlockDetail{}, apperror.NotFound("Block not found", nil)
+	}
+
+	pagination := helpers.BuildPaginationMeta(
+		int64(limit),
+		int64(page),
+		block.TxCount,
+		nil,
+	)
+
+	difficulty, _ := utils.CompactToDifficulty(uint32(block.Nbits)).Int64()
+
+	blockDetail := BlockDetail{
+		ID:         block.ID,
+		BID:        block.BID,
+		PrevHash:   block.PrevHash,
+		Nonce:      block.Nonce,
+		Height:     block.Height,
+		MerkleRoot: block.MerkleRoot,
+		Nbits:      block.Nbits,
+		TxCount:    block.TxCount,
+		NchainWork: block.NchainWork,
+		Size:       block.Size,
+		Timestamp:  block.Timestamp,
+		Difficulty: difficulty,
+		Miner:      block.Miner,
+		TotalFee:   block.TotalFee,
+		Transactions: struct {
+			Data json.RawMessage
+			Meta *response.PaginationMeta
+		}{
+			Data: block.Transactions,
+			Meta: pagination,
+		},
+	}
+
+	return blockDetail, nil
 }

@@ -1,8 +1,8 @@
 package dto
 
 type PaginationQuery struct {
-	Page       *int64  `query:"page" validate:"omitempty,gte=0,lte=100"`
-	Limit      *int64  `query:"limit" validate:"omitempty,gte=1,lte=100"`
+	Page       *int64  `query:"page" validate:"omitempty,gte=0"`
+	Limit      *int64  `query:"limit" validate:"omitempty,gte=0"`
 	NextCursor *string `query:"cursor"`
 }
 
@@ -11,8 +11,8 @@ func (p *PaginationQuery) UseCursor() bool {
 }
 
 func (p *PaginationQuery) SetDefaults() {
-	defaultLimit := int64(10)
 	if p.Limit == nil {
+		defaultLimit := int64(10)
 		p.Limit = &defaultLimit
 	}
 	if p.Page == nil {

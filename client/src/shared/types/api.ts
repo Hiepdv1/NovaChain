@@ -6,7 +6,7 @@ export interface BaseResponse<T> {
   data: T;
 }
 
-export interface PagainationMeta {
+export interface PaginationMeta {
   limit: number;
   total: number;
   currentPage: number;
@@ -19,7 +19,7 @@ export interface BaseResponseList<T> {
   statusCode: number;
   message?: string;
   data: T;
-  meta: PagainationMeta;
+  meta: PaginationMeta;
   traceId?: string;
 }
 

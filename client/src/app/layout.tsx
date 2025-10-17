@@ -6,6 +6,7 @@ import ReactQueryProvider from '@/components/providers/react-query-provider';
 import ModalProvider from '@/components/providers/modal-provider';
 import { WalletProvider } from '@/components/providers/wallet-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
+import { HistoryProvider } from '@/components/providers/History-provider';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -40,7 +41,7 @@ export default function RootLayout({
             <WalletProvider>
               <UIProvider>
                 <ModalProvider />
-                {children}
+                <HistoryProvider>{children}</HistoryProvider>
               </UIProvider>
             </WalletProvider>
           </ReactQueryProvider>

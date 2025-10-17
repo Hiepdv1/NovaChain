@@ -1,3 +1,5 @@
+import { NullableString } from '@/shared/types/flag';
+
 export interface TransactionPayload {
   fee: number;
   amount: number;
@@ -103,4 +105,15 @@ export interface TransactionPending extends TransactionData {
     Time: string;
     Valid: boolean;
   };
+}
+
+export interface TransactionFull {
+  ID: string;
+  TxID: string;
+  BID: string;
+  CreateAt: number;
+  Amount: NullableString;
+  Fee: NullableString;
+  Fromhash: NullableString;
+  Tohash: NullableString;
 }

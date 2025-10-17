@@ -32,6 +32,11 @@ func (r *TransactionRoutes) RegisterPublic(router fiber.Router) {
 		r.handler.GetListTransaction,
 	)
 
+	publicGroup.Get("/search",
+		middlewares.ValidateQuery[GetTransactionSearchDto](false),
+		r.handler.SearchTransactions,
+	)
+
 }
 
 func (r *TransactionRoutes) RegisterPrivate(router fiber.Router) {

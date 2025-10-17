@@ -23,3 +23,12 @@ type GetSearchResultDto struct {
 	Search_Query string `query:"search_query" validate:"min=1,excludesall= \t\n\r"`
 	dto.PaginationQuery
 }
+
+type GetBlockDetailParamDto struct {
+	BlockHash string `params:"blockHash" validate:"required,hexadecimal,len=64"`
+}
+
+type GetBlockDetailDto struct {
+	BlockHash string
+	dto.PaginationQuery
+}

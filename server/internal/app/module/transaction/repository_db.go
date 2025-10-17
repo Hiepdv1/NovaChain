@@ -30,16 +30,33 @@ func (r *dbTransactionRepository) CreateTransaction(ctx context.Context, args db
 	return q.CreateTransaction(ctx, args)
 }
 
-func (r *dbTransactionRepository) GetListTransactionByBlockHash(ctx context.Context, bID string, tx *sql.Tx) ([]dbchain.Transaction, error) {
+func (r *dbTransactionRepository) GetListTransactionByBlockHash(ctx context.Context, arg dbchain.GetListTransactionByBIDParams, tx *sql.Tx) ([]dbchain.Transaction, error) {
 	q := r.queries
 
 	if tx != nil {
 		q = r.queries.WithTx(tx)
 	}
 
-	return q.GetListTransactionByBID(ctx, bID)
+	return q.GetListTransactionByBID(ctx, arg)
 }
 
+func (r *dbTransactionRepository) GetFullTransactionByBlockHash(ctx context.Context, b_hash string, tx *sql.Tx) ([]dbchain.Transaction, error) {
+	q := r.queries
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+	return q.GetFullTransactionByBID(ctx, b_hash)
+}
+
+func (r *dbTransactionRepository) CountTransactionByBID(ctx context.Context, b_id string, tx *sql.Tx) (int64, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	return q.CountTransactionByBID(ctx, b_id)
+}
 func (r *dbTransactionRepository) GetListTransaction(ctx context.Context, args dbchain.GetListTransactionsParams, tx *sql.Tx) ([]dbchain.Transaction, error) {
 	q := r.queries
 
@@ -136,6 +153,14 @@ func (r *dbTransactionRepository) CountTodayTransaction(ctx context.Context, tx 
 	}
 
 	return q.CountTodayTransactions(ctx)
+}
+
+func (r *dbTransactionRepository) SearchFuzzyTransactionsByBlock(ctx context.Context, arg dbchain.SearchFuzzyTransactionsByBlockParams) ([]dbchain.Transaction, error) {
+	return r.queries.SearchFuzzyTransactionsByBlock(ctx, arg)
+}
+
+func (r *dbTransactionRepository) CountFuzzyTransactionsByBlock(ctx context.Context, arg dbchain.CountFuzzyTransactionsByBlockParams) (int64, error) {
+	return r.queries.CountFuzzyTransactionsByBlock(ctx, arg)
 }
 
 // ---------------- Pending Transactions ----------------

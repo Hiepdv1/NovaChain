@@ -9,6 +9,8 @@ import { useCallback } from 'react';
 import { CACHE_TIME } from '@/shared/constants/ttl';
 import { IsNumber } from '@/shared/utils/format';
 import ErrorState from '@/components/errorState';
+import SearchResultSkeleton from '../components/SearchResultSkeleton';
+import EmptyState from '../components/SearchEmpty';
 
 const SearchResultPage = () => {
   const searchParams = useSearchParams();
@@ -53,14 +55,18 @@ const SearchResultPage = () => {
   }, [refetch]);
 
   if (!query || query.length < 1) {
-    return <SearchEmptyState />;
+    return <EmptyState />;
   }
 
-  if (isLoading || isFetching || isError) {
+  if (isLoading || isFetching) {
+    return <SearchResultSkeleton />;
+  }
+
+  if (isError || !data) {
     return <ErrorState message={error?.message} onRetry={onRetry} />;
   }
 
-  const results = data?.data;
+  const results = data.data;
 
   if (!results || results.length === 0) {
     return <SearchEmptyState />;

@@ -57,3 +57,32 @@ func (h *ChainHandler) GetSearchResult(c *fiber.Ctx) error {
 		fiber.StatusOK,
 	)
 }
+
+func (h *ChainHandler) GetBlockDetail(c *fiber.Ctx) error {
+	params, apperr := helpers.GetLocalParams[GetBlockDetailParamDto](c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	queries, apperr := helpers.GetLocalQuery[dto.PaginationQuery](c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	dto := &GetBlockDetailDto{
+		BlockHash:       params.BlockHash,
+		PaginationQuery: *queries,
+	}
+
+	result, apperr := h.service.GetBlockDetail(dto)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	return response.Success(
+		c,
+		result,
+		"Get block detail successfully",
+		fiber.StatusOK,
+	)
+}

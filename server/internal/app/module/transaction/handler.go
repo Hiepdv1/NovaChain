@@ -114,3 +114,24 @@ func (h *TransactionHandler) GetListTransactionPending(c *fiber.Ctx) error {
 		fiber.StatusOK,
 	)
 }
+
+func (h *TransactionHandler) SearchTransactions(c *fiber.Ctx) error {
+	queries, apperr := helpers.GetLocalQuery[GetTransactionSearchDto](c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	txs, pagination, appErr := h.service.SearchTransactions(queries)
+
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	return response.SuccessList(
+		c,
+		txs,
+		*pagination,
+		"Search transactions successfully",
+		fiber.StatusOK,
+	)
+}
