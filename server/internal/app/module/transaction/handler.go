@@ -36,6 +36,16 @@ func (h *TransactionHandler) GetListTransaction(c *fiber.Ctx) error {
 	)
 }
 
+func (h *TransactionHandler) GetDetailTransaction(c *fiber.Ctx) error {
+
+	return response.Success(
+		c,
+		nil,
+		"Get detail transaction successfully",
+		fiber.StatusOK,
+	)
+}
+
 func (h *TransactionHandler) CreateNewTransaction(c *fiber.Ctx) error {
 	dto, apperr := helpers.GetLocalBody[*NewTransactionParsed](c)
 
@@ -83,7 +93,7 @@ func (h *TransactionHandler) SendTransaction(c *fiber.Ctx) error {
 
 	return response.Success(
 		c,
-		nil,
+		dto,
 		"Send Transaction Successfully",
 		fiber.StatusCreated,
 	)
@@ -123,6 +133,26 @@ func (h *TransactionHandler) SearchTransactions(c *fiber.Ctx) error {
 
 	txs, pagination, appErr := h.service.SearchTransactions(queries)
 
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	return response.SuccessList(
+		c,
+		txs,
+		*pagination,
+		"Search transactions successfully",
+		fiber.StatusOK,
+	)
+}
+
+func (h *TransactionHandler) GetPendingTransactions(c *fiber.Ctx) error {
+	queries, apperr := helpers.GetLocalQuery[GetTransactionPendingDto](c)
+	if apperr != nil {
+		return apperr.Response(c)
+	}
+
+	txs, pagination, appErr := h.service.GetPendingTransactions(queries)
 	if appErr != nil {
 		return appErr.Response(c)
 	}

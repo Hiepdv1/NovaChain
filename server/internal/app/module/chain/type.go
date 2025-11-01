@@ -28,3 +28,13 @@ type BlockDetail struct {
 		Meta *response.PaginationMeta
 	}
 }
+
+type NetworkInfo struct {
+	LastBlock     int64
+	Hashrate      string
+	AvgBlockTime  float64
+	AvgDifficulty float64
+	SyncStatus    string
+	NetworkHealth string
+	TxPending     int64
+}

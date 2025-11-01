@@ -1,6 +1,5 @@
 
 -- UTXOs
-DROP TABLE IF EXISTS schema_migrations CASCADE;
 DROP INDEX IF EXISTS idx_utxos_block;
 DROP INDEX IF EXISTS idx_utxos_pubkey;
 DROP INDEX IF EXISTS idx_utxos_tx_out;

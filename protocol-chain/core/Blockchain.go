@@ -25,13 +25,13 @@ type Blockchain struct {
 }
 
 var (
-	MaxTarget = big.NewInt(0x1d00ffff)
+	MaxTarget = CompactToBig(0x1f00ffff)
 )
 
 const (
-	AdjustmentInterval = 10
-	TargetBlockTime    = 600 // 10 minute
-	MaxTimestampDrift  = 600 // 10 minute
+	AdjustmentInterval = 100
+	TargetBlockTime    = 60 // 3 minute
+	MaxTimestampDrift  = 60 // 1 minute
 	CheckpointInterval = 10
 	MaxBlockSize       = 1 * 1024 * 1024 // 1mb
 	BestHeightPrefix   = "lh"
@@ -124,7 +124,7 @@ func InitBlockchain(instanceId string) (*Blockchain, error) {
 		}
 		lastHash = genesis.Hash
 
-		key := fmt.Sprint(CheckpointPrefix, genesis.Height)
+		key := fmt.Sprintf("%s%d", CheckpointPrefix, genesis.Height)
 		err = txn.Set([]byte(key), genesis.Hash)
 
 		return err
@@ -246,7 +246,7 @@ func (bc *Blockchain) AdjustDifficulty(lastBlock *Block) uint32 {
 	newTarget.Div(newTarget, big.NewInt(targetTimespan))
 
 	if newTarget.Cmp(MaxTarget) > 0 {
-		newTarget.Set(MaxTarget)
+		newTarget = MaxTarget
 	}
 
 	return BigToCompact(newTarget)
@@ -259,7 +259,7 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) (bool, error) {
 		return false, err
 	}
 
-	checkpointHeight := (bl.Height / CheckpointInterval) * CheckpointInterval
+	checkpointHeight := (bl.Height / CheckpointInterval)
 	if checkpointHeight > 0 {
 		var checkpointHash []byte
 		err := bc.Database.View(func(txn *badger.Txn) error {
@@ -284,7 +284,10 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) (bool, error) {
 		}
 
 		currentHash := prevBlock.PrevHash
-		currentHeight := prevBlock.Height
+		currentHeight := prevBlock.Height - 1
+
+		log.Infof("Checkpointheight %d", checkpointHeight)
+		log.Infof("Current Height: %d", currentHeight)
 
 		for currentHeight > checkpointHeight && len(currentHash) > 0 {
 			currentBlock, err := bc.GetBlock(currentHash)
@@ -294,7 +297,7 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) (bool, error) {
 				return false, nil
 			}
 
-			if currentBlock.Height != currentHeight-1 {
+			if currentBlock.Height != currentHeight {
 				log.Warnf("Height mismatch at block %x: expected %d, got %d", currentHash, currentHeight-1, currentBlock.Height)
 				return false, nil
 			}
@@ -302,7 +305,7 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) (bool, error) {
 			_, err = bc.GetBlock(currentBlock.PrevHash)
 
 			if err != nil {
-				log.Warnf("Missing previous block %x", currentBlock.PrevHash)
+				log.Errorf("Failed to get prevBlock %x with height %d - : %v", currentBlock.PrevHash, currentBlock.Height-1, err)
 				return false, nil
 			}
 
@@ -368,7 +371,7 @@ func (bc *Blockchain) ComputeChain(lashBlockForkChain Block) error {
 func (bc *Blockchain) IsBlockValid(bl Block) bool {
 	prevBlock, err := bc.GetBlock(bl.PrevHash)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Failed to get prevBlock: %v", err)
 		return false
 	}
 	currentTime := time.Now().Unix()
@@ -378,32 +381,35 @@ func (bc *Blockchain) IsBlockValid(bl Block) bool {
 		return false
 	}
 
-	if bl.Timestamp >= currentTime+MaxTimestampDrift || bl.Timestamp < prevBlock.Timestamp {
+	if bl.Timestamp >= currentTime+MaxTimestampDrift || bl.Timestamp <= prevBlock.Timestamp {
 		log.Warnf("Invalid timestamp: too far in future or past. Current timestamp of block %d, MaxTimestampDrift %d", bl.Timestamp, currentTime+MaxTimestampDrift)
 		return false
 	}
 
 	isValidCheckpoint, err := bc.IsValidCheckpoint(&bl)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Failed to get checopoint: %v", err)
 		return false
 	}
 
 	if !isValidCheckpoint {
+		log.Warn("Invalid Checkpoint")
 		return false
 	}
 
 	if bl.NBits != bc.AdjustDifficulty(&prevBlock) {
+		log.Warn("Invalid Nbits")
 		return false
 	}
 
 	size, err := bl.Size()
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Failed to get size: %v", err)
 		return false
 	}
 
 	if size > MaxBlockSize {
+		log.Warn("block size > Max Block Size")
 		return false
 	}
 
@@ -722,26 +728,76 @@ func (bc *Blockchain) SignTransaction(privKey ecdsa.PrivateKey, tx *Transaction)
 func (bc *Blockchain) ValidateBlockTransactions(bl *Block) bool {
 	utxos, err := bc.FindUTXO()
 	if err != nil {
+		log.Error("❌ Failed to retrieve UTXO set during block transaction validation")
 		return false
 	}
 
+	lastBlock, err := bc.GetLastBlock()
+	if err != nil {
+		log.Error("❌ Failed to get last block while validating new block transactions")
+		return false
+	}
+
+	currentRewardBlock := NewCoinAmountFromFloat(0.0)
+	fee := NewCoinAmountFromFloat(0.0)
+
 	for _, tx := range bl.Transactions {
 		if tx.IsMinerTx() {
+			if currentRewardBlock.ToFloat() > 0 {
+				log.Warn("⚠️ Multiple miner transactions detected — only one coinbase transaction is allowed per block")
+				return false
+			}
+
+			currentRewardBlock = NewCoinAmountFromFloat(tx.Outputs[0].Value)
+			log.Debugf("💰 Detected miner transaction with reward: %.8f", currentRewardBlock)
 			continue
 		}
 
 		if !bc.VerifyTransaction(tx) {
+			log.Errorf("🚫 Transaction verification failed for TxID: %x", tx.ID)
 			return false
 		}
 
+		totalInput := NewCoinAmountFromFloat(0.0)
 		for _, in := range tx.Inputs {
 			txID := hex.EncodeToString(in.ID)
 			if _, exists := utxos[txID]; !exists {
+				log.Warnf("🚫 Referenced input not found in UTXO set — TxID: %s", txID)
 				return false
 			}
+
+			tx, err := bc.FindTransaction(in.ID)
+			if err != nil {
+				log.Errorf("❌ Failed to retrieve referenced transaction (%s): %v", txID, err)
+				return false
+			}
+
+			if in.Out > int64(len(tx.Outputs)-1) {
+				log.Errorf("🚫 Invalid input index %d — transaction has only %d outputs", in.Out, len(tx.Outputs))
+				return false
+			}
+
+			totalInput = totalInput.Add(NewCoinAmountFromFloat(tx.Outputs[in.Out].Value))
 		}
+
+		totalOutput := NewCoinAmountFromFloat(0.0)
+		for _, out := range tx.Outputs {
+			totalOutput = totalOutput.Add(NewCoinAmountFromFloat(out.Value))
+		}
+
+		feeTx := SumFees(totalInput, totalOutput)
+		fee = fee.Add(feeTx)
+		log.Debugf("🧮 Processed transaction %x — totalInput: %.8f, totalOutput: %.8f, feeAcc: %.8f", tx.ID, totalInput, totalOutput, fee)
 	}
 
+	calcBlockReward := bc.GetReward(lastBlock.Height + 1)
+
+	if !ValidateBlockReward(currentRewardBlock, calcBlockReward.Add(fee)) {
+		log.Warnf("⚖️ Invalid block reward: expected %.8f, got %.8f (fee: %.8f)", calcBlockReward.ToFloat(), currentRewardBlock.ToFloat()-fee.ToFloat(), fee.ToFloat())
+		return false
+	}
+
+	log.Infof("✅ All block transactions validated successfully (height: %d, reward: %.8f, fee: %.8f)", lastBlock.Height+1, currentRewardBlock.ToFloat(), fee.ToFloat())
 	return true
 }
 
@@ -771,10 +827,11 @@ func (bc *Blockchain) VerifyTransaction(tx *Transaction) bool {
 }
 
 func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, callback func([]*Transaction), ctx context.Context) (*Block, error) {
-	var totalInput float64
-	var totalOuput float64
+	fee := NewCoinAmountFromFloat(0.0)
 
 	for _, tx := range transactions {
+		totalInput := NewCoinAmountFromFloat(0.0)
+		totalOuput := NewCoinAmountFromFloat(0.0)
 		publicKey := tx.Inputs[0].PubKey
 		if !bc.VerifyTransaction(tx) {
 			log.Error("Invalid Transaction")
@@ -790,12 +847,20 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, cal
 			if err != nil {
 				return nil, err
 			}
-			totalInput += tx.Outputs[in.Out].Value
+			if in.Out > int64(len(tx.Outputs)-1) {
+				return nil, fmt.Errorf("🚫 Invalid input index %d — transaction has only %d outputs", in.Out, len(tx.Outputs)-1)
+			}
+			value := NewCoinAmountFromFloat(tx.Outputs[in.Out].Value)
+			totalInput = totalInput.Add(value)
 		}
 
 		for _, out := range tx.Outputs {
-			totalOuput += out.Value
+			value := NewCoinAmountFromFloat(out.Value)
+			totalOuput = totalOuput.Add(value)
 		}
+
+		feeTx := totalInput.Sub(totalOuput)
+		fee = fee.Add(feeTx)
 	}
 
 	lastestBlock, err := bc.GetLastBlock()
@@ -811,7 +876,9 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, cal
 		return nil, err
 	}
 
-	reward.Outputs[0].Value += totalInput - totalOuput
+	value := NewCoinAmountFromFloat(reward.Outputs[0].Value)
+
+	reward.Outputs[0].Value = value.Add(fee).ToFloat()
 
 	transactions = append(transactions, reward)
 
@@ -819,10 +886,6 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction, address string, cal
 
 	if err != nil {
 		return nil, err
-	}
-
-	if block == nil {
-		return nil, nil
 	}
 
 	err = bc.AddBlock(block, callback)

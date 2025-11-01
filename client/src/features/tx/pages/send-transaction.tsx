@@ -39,6 +39,10 @@ import {
 } from '../types/transaction';
 import { useTransactionPending } from '../hook/useTransactionQuery';
 import TransactionPending from '../components/tx-pending';
+import { useNetworkInfo } from '@/features/block/hooks/useBlockQuery';
+import ErrorState from '@/components/errorState';
+import { CACHE_TIME } from '@/shared/constants/ttl';
+import { FormatFloat, FormatSeconds } from '@/shared/utils/format';
 
 type RefMap = {
   btnVerify: HTMLButtonElement | null;
@@ -102,8 +106,44 @@ const SendTransactionPage = () => {
   const {
     data: txPendings,
     isLoading: isLoadingTxPending,
+    isFetching: isFetchTxPending,
     error: errorPending,
-  } = useTransactionPending({});
+    refetch: refreshTxPending,
+    isError: isErrorTxPending,
+  } = useTransactionPending(
+    {},
+    {
+      retry: false,
+      staleTime: 0,
+      refetchOnReconnect: false,
+      refetchOnWindowFocus: false,
+      gcTime: CACHE_TIME,
+    },
+  );
+
+  const {
+    isLoading: isLoadingNetwork,
+    isFetching: isFetchingNetwork,
+    data: networkInfo,
+    error: networkErr,
+    refetch: refreshNetwork,
+    isError: isErrorNetwork,
+  } = useNetworkInfo({
+    retry: false,
+    staleTime: 0,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    gcTime: CACHE_TIME,
+  });
+
+  const onRetry = useCallback(() => {
+    if (isErrorTxPending) {
+      refreshTxPending();
+    }
+    if (isErrorNetwork) {
+      refreshNetwork();
+    }
+  }, [refreshTxPending, isErrorTxPending, isErrorNetwork, refreshNetwork]);
 
   const onCheckedFee = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
@@ -403,14 +443,22 @@ const SendTransactionPage = () => {
     }
   }, [wallet, router]);
 
-  if (
-    !wallet ||
-    !wallet.data ||
-    isLoadingTxPending ||
-    !txPendings ||
-    errorPending
-  ) {
+  const isWalletLoading = isFetchTxPending || isLoadingTxPending;
+  const isNetworkLoading = isLoadingNetwork || isFetchingNetwork;
+
+  if (isWalletLoading || isNetworkLoading) {
     return <ContentLoading />;
+  }
+
+  if (
+    !txPendings ||
+    !wallet ||
+    errorPending ||
+    networkErr ||
+    !wallet.data ||
+    !networkInfo?.data
+  ) {
+    return <ErrorState onRetry={onRetry} />;
   }
 
   if (txPendings.data && txPendings.data.length > 0) {
@@ -420,7 +468,7 @@ const SendTransactionPage = () => {
   return (
     <div className="space-y-6 select-none">
       <div className="space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col items-start lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
               Send Transaction
@@ -430,22 +478,22 @@ const SendTransactionPage = () => {
             </p>
           </div>
 
-          <div className="flex flex-col lg:flex-row items-center space-x-4">
-            <div className="text-center">
+          <div className="flex flex-col lg:flex-row md:items-center space-x-0 md:space-x-4">
+            <div className="text-center flex gap-2 md:gap-0 md:block">
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 Block Time
               </div>
               <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                12.3s
+                {FormatSeconds(FormatFloat(networkInfo.data.AvgBlockTime, 1))}s
               </div>
             </div>
 
-            <div className="text-center">
+            <div className="text-center flex gap-2 md:block md:gap-0">
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 Network Load
               </div>
               <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                Normal
+                {networkInfo.data.NetworkHealth}
               </div>
             </div>
           </div>
@@ -460,7 +508,8 @@ const SendTransactionPage = () => {
                   Network Status: Operational
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">
-                  All systems running normally • 1,847 pending transactions
+                  All systems running normally • {networkInfo.data.TxPending}{' '}
+                  pending transactions
                 </div>
               </div>
             </div>
@@ -470,7 +519,7 @@ const SendTransactionPage = () => {
                 Last Block
               </div>
               <div className="text-sm font-medium text-gray-900 dark:text-white">
-                #2,847,392
+                #{networkInfo.data.LastBlock}
               </div>
             </div>
           </div>
@@ -899,7 +948,7 @@ const SendTransactionPage = () => {
             }}
           />
 
-          <NetworkStatus />
+          <NetworkStatus network={networkInfo.data} />
         </div>
       </div>
     </div>

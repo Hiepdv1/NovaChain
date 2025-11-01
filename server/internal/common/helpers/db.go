@@ -21,7 +21,7 @@ func StringToNullString(s string) sql.NullString {
 
 func FloatToNullString(n float64) sql.NullString {
 	return sql.NullString{
-		String: fmt.Sprintf("%.8f", n),
+		String: fmt.Sprintf("%f", n),
 		Valid:  true,
 	}
 }

@@ -15,6 +15,26 @@ SET priority = $2, updated_at = now()
 WHERE tx_id = $1
 RETURNING *;
 
+-- name: GetListPendingTxs :many
+SELECT 
+  id,
+  tx_id,
+  address,
+  receiver_address,
+  status,
+  amount,
+  fee,
+  priority,
+  created_at,
+  updated_at
+FROM pending_transactions
+ORDER BY created_at DESC
+OFFSET $1
+LIMIT $2;
+
+-- name: GetCountPendingTxs :one
+SELECT COUNT(*) FROM pending_transactions;
+
 -- name: SelectPendingTransactions :many
 SELECT p.*, pd.raw_tx, pd.pub_key_hash
 FROM pending_transactions p

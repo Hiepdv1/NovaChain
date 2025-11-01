@@ -89,6 +89,10 @@ func (g *GossipManager) Broadcast(
 	excludePeerIDs []string,
 	handler func(p peer.ID),
 ) {
+	if len(peers) < 1 {
+		return
+	}
+
 	for _, pId := range peers {
 		if slices.Contains(excludePeerIDs, pId.String()) {
 			continue

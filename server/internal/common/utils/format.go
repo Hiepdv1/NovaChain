@@ -14,3 +14,15 @@ func FormatHashrate(hashrate float64) (float64, string) {
 		return hashrate, "H/s"
 	}
 }
+
+func FormatTrend(n float64) string {
+	if n > 0 {
+		return "increase"
+	}
+
+	if n < 0 {
+		return "decrease"
+	}
+
+	return "stable"
+}

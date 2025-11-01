@@ -6,6 +6,7 @@ import (
 	dbchain "ChainServer/internal/db/chain"
 	"context"
 	"database/sql"
+	"encoding/hex"
 )
 
 type dbChainRepository struct {
@@ -60,7 +61,7 @@ func (r *dbChainRepository) GetBlockByHash(ctx context.Context, hash string, tx 
 	return q.GetBlockByBID(ctx, hash)
 }
 
-func (r *dbChainRepository) GetListBlock(ctx context.Context, args dbchain.GetListBlocksParams, tx *sql.Tx) ([]dbchain.Block, error) {
+func (r *dbChainRepository) GetListBlock(ctx context.Context, args dbchain.GetListBlocksParams, tx *sql.Tx) ([]dbchain.GetListBlocksRow, error) {
 	q := r.queries
 
 	if tx != nil {
@@ -161,4 +162,76 @@ func (r *dbChainRepository) CountFuzzyByType(ctx context.Context, content string
 func (r *dbChainRepository) GetBlockDetailWithTransactions(ctx context.Context, arg dbchain.GetBlockDetailWithTransactionsParams) (dbchain.GetBlockDetailWithTransactionsRow, error) {
 
 	return r.queries.GetBlockDetailWithTransactions(ctx, arg)
+}
+
+func (r *dbChainRepository) GetRecentBlocksForNetworkInfo(ctx context.Context, limit int32) ([]dbchain.GetRecentBlocksForNetworkInfoRow, error) {
+	return r.queries.GetRecentBlocksForNetworkInfo(ctx, limit)
+}
+
+func (r *dbChainRepository) GetBlockLocator(ctx context.Context, tx *sql.Tx) ([][]byte, error) {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	var locator [][]byte
+	step := int64(1)
+	height, err := q.GetBestHeight(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for height > 1 {
+		block, err := q.GetBlockByHeight(ctx, height)
+		if err != nil {
+			return nil, err
+		}
+		hash, err := hex.DecodeString(block.BID)
+		if err != nil {
+			return nil, err
+		}
+
+		locator = append(locator, hash)
+
+		if len(locator) > 10 {
+			step *= 2
+		}
+
+		if height > step {
+			height -= step
+		} else {
+			break
+		}
+	}
+
+	genesis, _ := q.GetBlockByHeight(ctx, 1)
+	hash, err := hex.DecodeString(genesis.BID)
+	if err != nil {
+		return nil, err
+	}
+
+	locator = append(locator, hash)
+
+	return locator, nil
+}
+
+func (r *dbChainRepository) DeleteBlockByRangeHeight(ctx context.Context, start, end int64, tx *sql.Tx) error {
+	q := r.queries
+
+	if tx != nil {
+		q = r.queries.WithTx(tx)
+	}
+
+	for start > end {
+		err := q.DeleteBlockByHeight(ctx, start)
+		if err != nil {
+			return err
+		}
+
+		start++
+	}
+
+	return nil
 }

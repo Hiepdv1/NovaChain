@@ -27,7 +27,7 @@ func GetTxInfo(tx *blockchain.Transaction, bl *blockchain.Blockchain) *TxInfo {
 		return nil
 	}
 
-	totalInput := 0.0
+	totalInput := blockchain.NewCoinAmountFromFloat(0.0)
 	for _, in := range tx.Inputs {
 		prevTx, err := bl.FindTransaction(in.ID)
 		if err != nil {
@@ -36,17 +36,19 @@ func GetTxInfo(tx *blockchain.Transaction, bl *blockchain.Blockchain) *TxInfo {
 		}
 
 		out := prevTx.Outputs[in.Out]
-		totalInput += out.Value
+		value := blockchain.NewCoinAmountFromFloat(out.Value)
+		totalInput = totalInput.Add(value)
 
 	}
 
-	totalOutput := 0.0
+	totalOutput := blockchain.NewCoinAmountFromFloat(0.0)
 	for _, out := range tx.Outputs {
-		totalOutput += out.Value
+		value := blockchain.NewCoinAmountFromFloat(out.Value)
+		totalOutput = totalOutput.Add(value)
 	}
 
 	return &TxInfo{
-		Fee:         totalInput - totalOutput,
+		Fee:         blockchain.SumFees(totalInput, totalOutput).ToFloat(),
 		Transaction: *tx,
 	}
 }
@@ -67,11 +69,8 @@ func (memo *Memopool) GetTxByID(txID string) *blockchain.Transaction {
 
 func (memo *Memopool) Add(tx TxInfo) {
 	txID := hex.EncodeToString(tx.Transaction.ID)
-	if _, exists := memo.Pending[txID]; exists {
-		return
-	}
 
-	if _, exists := memo.Queued[txID]; exists {
+	if memo.HasTX(txID) {
 		return
 	}
 
@@ -83,7 +82,7 @@ func (memo *Memopool) HasPending(txID string) bool {
 	return exists
 }
 
-func (memo *Memopool) HashTX(txID string) bool {
+func (memo *Memopool) HasTX(txID string) bool {
 	if _, exists := memo.Pending[txID]; exists {
 		return true
 	}

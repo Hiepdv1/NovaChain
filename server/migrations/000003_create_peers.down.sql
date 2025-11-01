@@ -1,0 +1,4 @@
+
+
+DROP INDEX IF EXISTS idx_peers_pID;
+DROP TABLE IF EXISTS peers;

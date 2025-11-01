@@ -32,3 +32,8 @@ type GetBlockDetailDto struct {
 	BlockHash string
 	dto.PaginationQuery
 }
+
+type GetTestNumner struct {
+	Number1 float64 `query:"n" validate:"required"`
+	Number2 float64 `query:"n2" validate:"required"`
+}

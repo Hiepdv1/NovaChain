@@ -99,11 +99,13 @@ const SearchResultPage = () => {
         ))}
       </div>
 
-      <SearchPagination
-        currentPage={meta.currentPage}
-        totalPages={Math.ceil(meta.total / meta.limit)}
-        onPageChange={onPageChange}
-      />
+      {meta.total > meta.limit && (
+        <SearchPagination
+          currentPage={meta.currentPage}
+          totalPages={Math.ceil(meta.total / meta.limit)}
+          onPageChange={onPageChange}
+        />
+      )}
     </div>
   );
 };

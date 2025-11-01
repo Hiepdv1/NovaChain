@@ -42,13 +42,13 @@ var (
 	Root = filepath.Join(filepath.Dir(file), "../")
 )
 
-func NewCLIUI(generalChannel, miningChannel, fullNodesChannel *Channel) *CLIUI {
+func NewCLIUI(miningChannel, fullNodesChannel *Channel) *CLIUI {
 	app := tview.NewApplication()
 
 	msgBox := tview.NewTextView()
 	msgBox.SetDynamicColors(true)
 	msgBox.SetBorder(true)
-	msgBox.SetTitle(fmt.Sprintf(" HOST (%s) ", strings.ToUpper(ShortID(generalChannel.self))))
+	msgBox.SetTitle(fmt.Sprintf(" HOST (%s) ", strings.ToUpper(ShortID(fullNodesChannel.self))))
 
 	msgBox.SetChangedFunc(func() {
 		app.Draw()
@@ -56,7 +56,7 @@ func NewCLIUI(generalChannel, miningChannel, fullNodesChannel *Channel) *CLIUI {
 
 	inputCh := make(chan string, 32)
 	input := tview.NewInputField().
-		SetLabel(strings.ToUpper(ShortID(generalChannel.self) + " > ")).
+		SetLabel(strings.ToUpper(ShortID(fullNodesChannel.self) + " > ")).
 		SetFieldWidth(0).
 		SetFieldBackgroundColor(tcell.ColorBlack)
 
@@ -104,14 +104,14 @@ func ShortID(p peer.ID) string {
 	return peerId[len(peerId)-8:]
 }
 
-func (ui *CLIUI) Run(net *Network, callback func(*Network)) error {
+func (ui *CLIUI) Run(net *Network) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("UI Crashed: %v", r)
 		}
 	}()
 
-	go ui.handleEvents(net, callback)
+	go ui.handleEvents(net)
 	defer ui.end()
 
 	return ui.app.Run()
@@ -122,8 +122,12 @@ func (ui *CLIUI) end() {
 }
 
 func (ui *CLIUI) displaySelfMessage(msg string) {
-	prompt := withColor("yellow", fmt.Sprintf("<%s>:", strings.ToUpper(ShortID(ui.FullNodesChannel.self))))
-	fmt.Fprintf(ui.hostWindow, "%s %s\n", prompt, msg)
+	ui.app.QueueUpdateDraw(func() {
+		prompt := withColor("yellow", fmt.Sprintf("<%s>:", strings.ToUpper(ShortID(ui.FullNodesChannel.self))))
+		fmt.Fprintf(ui.hostWindow, "%s %s\n", prompt, msg)
+		ui.hostWindow.ScrollToEnd()
+	})
+
 }
 
 func (ui *CLIUI) refreshPeers() {
@@ -140,8 +144,9 @@ func (ui *CLIUI) refreshPeers() {
 		}
 	}
 
-	ui.peerList.SetText(strings.Join(idStrs, "\n"))
-	ui.app.Draw()
+	ui.app.QueueUpdateDraw(func() {
+		ui.peerList.SetText(strings.Join(idStrs, "\n"))
+	})
 }
 
 func (ui *CLIUI) listenChannels(net *Network) {
@@ -159,12 +164,11 @@ func (ui *CLIUI) listenChannels(net *Network) {
 	}
 }
 
-func (ui *CLIUI) handleEvents(net *Network, callback func(*Network)) {
-	peerRefreshTicker := time.NewTicker(time.Second)
-	defer peerRefreshTicker.Stop()
+func (ui *CLIUI) handleEvents(net *Network) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
-	go ui.readFromLogs(net, callback)
-
+	go ui.readFromLogs(net)
 	go ui.listenChannels(net)
 
 	for {
@@ -176,12 +180,11 @@ func (ui *CLIUI) handleEvents(net *Network, callback func(*Network)) {
 			}
 			ui.displaySelfMessage(input)
 
-		case <-peerRefreshTicker.C:
-			ui.refreshPeers()
-
 		case <-ui.doneCh:
 			log.Info("Stopping CLI UI")
 			return
+		case <-ticker.C:
+			ui.refreshPeers()
 		}
 	}
 }
@@ -209,7 +212,7 @@ func (ui *CLIUI) HandleStream(net *Network, content *ChannelContent) {
 		case PREFIX_BLOCK_SYNC:
 			net.HandleGetBlockDataSync(content)
 
-			// Sync Transaction
+		// Sync Transaction
 		case PREFIX_TX:
 			net.HandleTx(content)
 		case PREFIX_TX_FROM_POOL:
@@ -226,7 +229,7 @@ func (ui *CLIUI) HandleStream(net *Network, content *ChannelContent) {
 	}
 }
 
-func (ui *CLIUI) readFromLogs(net *Network, callback func(*Network)) {
+func (ui *CLIUI) readFromLogs(net *Network) {
 	instanceId := net.Blockchain.InstanceId
 
 	filename := "/logs/console.log"
@@ -235,29 +238,22 @@ func (ui *CLIUI) readFromLogs(net *Network, callback func(*Network)) {
 	}
 
 	logFile := path.Join(Root, filename)
-	err := os.WriteFile(logFile, []byte(""), 0644)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
 	log.SetOutput(io.Discard)
 
-	f, err := os.Open(logFile)
+	openLog := func() (*os.File, *bufio.Reader, error) {
+		f, err := os.Open(logFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		return f, bufio.NewReader(f), nil
+	}
+
+	f, r, err := openLog()
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Cannot open log file initially: %v", err)
 		return
 	}
 	defer f.Close()
-
-	r := bufio.NewReader(f)
-	info, err := f.Stat()
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	callback(net)
 
 	logLevels := map[string]string{
 		"trace":   "cyan",
@@ -270,48 +266,78 @@ func (ui *CLIUI) readFromLogs(net *Network, callback func(*Network)) {
 		"panic":   "red",
 	}
 
+	info, _ := f.Stat()
 	oldSize := info.Size()
 
 	for {
-		for line, _, err := r.ReadLine(); err != io.EOF; line, _, err = r.ReadLine() {
-			var data Log
-
-			if err := json.Unmarshal(line, &data); err != nil {
-				panic(err)
-			}
-
-			prompt := fmt.Sprintf("%s:", withColor(logLevels[data.Level], strings.ToUpper(data.Level)))
-			fmt.Fprintf(ui.hostWindow, "%s %s\n", prompt, data.Msg)
-			ui.hostWindow.ScrollToEnd()
-		}
-
-		pos, err := f.Seek(0, io.SeekCurrent)
-		if err != nil {
-			log.Error(err)
-		}
-
 		for {
-			time.Sleep(time.Second)
-
-			newInfo, err := f.Stat()
-			if err != nil {
-				log.Error(err)
-			}
-
-			newSize := newInfo.Size()
-
-			if newSize != oldSize {
-				if newSize < oldSize {
-					f.Seek(0, io.SeekStart)
-				} else {
-					f.Seek(pos, io.SeekStart)
-				}
-				r = bufio.NewReader(f)
-				oldSize = newSize
+			line, _, err := r.ReadLine()
+			if err == io.EOF {
 				break
 			}
+
+			if err != nil {
+				if os.IsNotExist(err) {
+					log.Warnf("Log file %s missing (possibly compressed). Waiting for recreation...", logFile)
+					break
+				}
+				log.Errorf("Read line error: %v", err)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+
+			var data Log
+			if err := json.Unmarshal(line, &data); err != nil {
+				log.Errorf("Unmarshal log err: %v", err)
+				continue
+			}
+
+			ui.app.QueueUpdateDraw(func() {
+				prompt := fmt.Sprintf("%s:", withColor(logLevels[data.Level], strings.ToUpper(data.Level)))
+				fmt.Fprintf(ui.hostWindow, "%s %s\n", prompt, data.Msg)
+				ui.hostWindow.ScrollToEnd()
+			})
+
 		}
 
+		newInfo, err := os.Stat(logFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Warnf("Log file %s not found, retrying...", logFile)
+
+				for {
+					time.Sleep(1 * time.Second)
+					newFile, newReader, reopenErr := openLog()
+					if reopenErr == nil {
+						log.Infof("Reopened new log file: %s", logFile)
+						f.Close()
+						f = newFile
+						r = newReader
+						info, _ = f.Stat()
+						oldSize = info.Size()
+						break
+					}
+				}
+				continue
+			}
+			log.Errorf("Stat error: %v", err)
+		} else {
+			newSize := newInfo.Size()
+
+			if newSize < oldSize {
+				log.Warnf("Detected log rotation, reopening %s...", logFile)
+				f.Close()
+				newFile, newReader, _ := openLog()
+				f = newFile
+				r = newReader
+				oldSize = newSize
+				continue
+			}
+
+			oldSize = newSize
+		}
+
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

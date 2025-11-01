@@ -49,17 +49,17 @@ func (cli *CommandLine) CreateBlockchain() {
 
 }
 
-func (cli *CommandLine) StartNode(listenPort, minerAddress string, miner, fullNode bool, callback func(*p2p.Network)) {
+func (cli *CommandLine) StartNode(listenPort, minerAddress string, miner, fullNode, isSeedPeer bool, callback func(*p2p.Network)) {
 	defer helpers.RecoverAndLog()
 	if miner {
-		log.Infof("Starting Node %s as a MINER\n", listenPort)
+		log.Infof("Starting Node %s as a MINER", listenPort)
 		if len(minerAddress) > 0 {
 			log.Info("Mining is ON. Address to receive rewards: ", minerAddress)
 		} else {
 			log.Fatal("Please provide a valid miner address")
 		}
 	} else {
-		log.Infof("Starting Node on PORT: %s\n", listenPort)
+		log.Infof("Starting Node on PORT: %s", listenPort)
 	}
 
 	chain, err := cli.Blockchain.ContinueBlockchain()
@@ -67,7 +67,7 @@ func (cli *CommandLine) StartNode(listenPort, minerAddress string, miner, fullNo
 		log.Error(err)
 		return
 	}
-	p2p.StartNode(chain, listenPort, minerAddress, miner, fullNode, callback)
+	p2p.StartNode(chain, listenPort, minerAddress, miner, fullNode, isSeedPeer, callback)
 }
 
 func (cli *CommandLine) UpdateInstance(InstanceId string, closeDbAlways bool) (*CommandLine, error) {
@@ -91,7 +91,8 @@ func (cli *CommandLine) UpdateInstance(InstanceId string, closeDbAlways bool) (*
 
 func (cli *CommandLine) SendTx(txs []*blockchain.Transaction) SendResponse {
 	defer helpers.RecoverAndLog()
-	listTxs := make([]string, 0)
+	listTxs := make([]*blockchain.Transaction, 0)
+	listTxsStr := make([]string, 0)
 
 	if len(txs) == 0 {
 		return SendResponse{
@@ -103,23 +104,43 @@ func (cli *CommandLine) SendTx(txs []*blockchain.Transaction) SendResponse {
 	}
 
 	for _, tx := range txs {
+		txID := hex.EncodeToString(tx.ID)
+
 		if !cli.Blockchain.VerifyTransaction(tx) {
-			log.Warnf("Verify failed: %s", hex.EncodeToString(tx.ID))
+			log.Warnf("Verify failed: %s", txID)
 			return SendResponse{
-				Error: err.ErrInvalidArgument("Transaction invalid", hex.EncodeToString(tx.ID)),
+				Error: err.ErrInvalidArgument("Transaction invalid", txID),
 			}
 		}
-		listTxs = append(listTxs, hex.EncodeToString(tx.ID))
+		if p2p.MemoryPool.HasTX(txID) {
+			continue
+		}
+		listTxs = append(listTxs, tx)
+		listTxsStr = append(listTxsStr, txID)
 	}
 
 	if cli.P2P != nil {
-		cli.P2P.Transactions <- txs
+		if len(listTxs) > 0 {
+			cli.P2P.Transactions <- listTxs
+
+		} else {
+			return SendResponse{
+				Message: "Empty",
+				Count:   0,
+				ListTxs: []string{},
+				Error:   nil,
+			}
+		}
+	} else {
+		return SendResponse{
+			Error: err.ErrInternal("Internal error"),
+		}
 	}
 
 	return SendResponse{
 		Message: "Send transaction successfully",
-		Count:   int64(len(txs)),
-		ListTxs: listTxs,
+		Count:   int64(len(listTxsStr)),
+		ListTxs: listTxsStr,
 		Error:   nil,
 	}
 }
@@ -479,6 +500,34 @@ func (cli *CommandLine) GetBlocksByHeightRange(height, max int64) ([]*blockchain
 	return blocks, nil
 }
 
+func (cli *CommandLine) GetCommonBlock(locator [][]byte) (*blockchain.Block, error) {
+	var commonBlock *blockchain.Block
+	chain, err := cli.Blockchain.ContinueBlockchain()
+	if err != nil {
+		return nil, err
+	}
+
+	if cli.CloseDbAlways {
+		defer chain.Database.Close()
+	}
+
+	for _, bHash := range locator {
+		block, err := chain.GetBlock(bHash)
+		if err != nil {
+			if errors.Is(err, badger.ErrEmptyKey) {
+				continue
+			} else {
+				return nil, err
+			}
+		}
+
+		commonBlock = &block
+		break
+	}
+
+	return commonBlock, nil
+}
+
 func (cli *CommandLine) GetBlockByHash(hash []byte) GetBlockResponse {
 	chain, e := cli.Blockchain.ContinueBlockchain()
 	if e != nil {
@@ -539,4 +588,22 @@ func (cli *CommandLine) GetAllUTXOs() *GetAllUTXOsResponse {
 		Error:   nil,
 	}
 
+}
+
+func (cli *CommandLine) GetLastHeight() (int64, error) {
+	chain, e := cli.Blockchain.ContinueBlockchain()
+	if e != nil {
+		log.Errorf("Failed to continue blockchain: %v", e)
+		return 0, e
+	}
+	if cli.CloseDbAlways {
+		defer chain.Database.Close()
+	}
+
+	lastHeight, err := chain.GetBestHeight()
+	if err != nil {
+		return 0, err
+	}
+
+	return lastHeight, nil
 }

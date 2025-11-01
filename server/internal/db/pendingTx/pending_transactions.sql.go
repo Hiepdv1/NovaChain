@@ -51,6 +51,87 @@ func (q *Queries) CountTodayPendingTxs(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getCountPendingTxs = `-- name: GetCountPendingTxs :one
+SELECT COUNT(*) FROM pending_transactions
+`
+
+func (q *Queries) GetCountPendingTxs(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getCountPendingTxs)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getListPendingTxs = `-- name: GetListPendingTxs :many
+SELECT 
+  id,
+  tx_id,
+  address,
+  receiver_address,
+  status,
+  amount,
+  fee,
+  priority,
+  created_at,
+  updated_at
+FROM pending_transactions
+ORDER BY created_at DESC
+OFFSET $1
+LIMIT $2
+`
+
+type GetListPendingTxsParams struct {
+	Offset int32
+	Limit  int32
+}
+
+type GetListPendingTxsRow struct {
+	ID              uuid.UUID
+	TxID            string
+	Address         string
+	ReceiverAddress string
+	Status          string
+	Amount          string
+	Fee             string
+	Priority        sql.NullInt32
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+}
+
+func (q *Queries) GetListPendingTxs(ctx context.Context, arg GetListPendingTxsParams) ([]GetListPendingTxsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getListPendingTxs, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetListPendingTxsRow
+	for rows.Next() {
+		var i GetListPendingTxsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TxID,
+			&i.Address,
+			&i.ReceiverAddress,
+			&i.Status,
+			&i.Amount,
+			&i.Fee,
+			&i.Priority,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertPendingTransaction = `-- name: InsertPendingTransaction :one
 INSERT INTO pending_transactions (tx_id, address, receiver_address, status, priority, message, amount, fee)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

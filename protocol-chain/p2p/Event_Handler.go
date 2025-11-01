@@ -6,7 +6,9 @@ import (
 	"core-blockchain/memopool"
 	"encoding/gob"
 	"encoding/hex"
+	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	log "github.com/sirupsen/logrus"
@@ -14,40 +16,54 @@ import (
 
 func (net *Network) HandleRequestSync() {
 	listPeer := net.FullNodesChannel.ListPeers()
-	if len(listPeer) == 0 {
-		return
+
+	for len(listPeer) == 0 {
+		listPeer = net.FullNodesChannel.ListPeers()
 	}
 
-	log.Info("Starting network synchronization...")
+	log.Infof("Network sync: %d peer(s) connected — starting synchronization...", len(listPeer))
 
-	net.syncCompleted = false
+	time.Sleep(10 * time.Second)
 
 	locator, err := net.Blockchain.GetBlockLocator()
 	if err != nil {
-		log.Error("Failed to get block locator: ", err)
+		log.Error("Network sync aborted: failed to get block locator →", err)
 		return
 	}
+
+	log.Infof("Network sync: successfully retrieved block locator with %d entries", len(locator))
 
 	payload := NetHeaderLocator{
 		SendFrom: net.Host.ID().String(),
 		Locator:  locator,
 	}
 
-	net.Gossip.Broadcast(
-		net.FullNodesChannel.ListPeers(),
-		[]string{
-			net.Host.ID().String(),
-		},
-		func(p peer.ID) {
-			log.Infof("Sending header locator to peer: %s", p.String())
+	ticker := time.NewTicker(time.Minute)
 
-			net.SendHeaderLocator(
-				p.String(),
-				payload,
-			)
-		},
-	)
+	for range ticker.C {
+		if net.syncCompleted {
+			break
+		}
 
+		log.Infof("Network sync: broadcasting header locator to %d peer(s)...", len(net.FullNodesChannel.ListPeers()))
+
+		net.Gossip.Broadcast(
+			net.FullNodesChannel.ListPeers(),
+			[]string{
+				net.Host.ID().String(),
+			},
+			func(p peer.ID) {
+				log.Infof("Network sync: sending header locator to peer %s", p.String())
+
+				net.SendHeaderLocator(
+					p.String(),
+					payload,
+				)
+			},
+		)
+	}
+
+	log.Info("Network sync: header locator broadcast completed — waiting for peer responses...")
 }
 
 func (net *Network) HandleReoganizeTx(txs []*blockchain.Transaction) {
@@ -85,30 +101,52 @@ func (net *Network) HandleTxMining(content *ChannelContent) {
 }
 
 func (net *Network) HandleTx(content *ChannelContent) {
+
 	buff := new(bytes.Buffer)
 	var payload NetTx
 
 	buff.Write(content.Payload[commandLength:])
 	dec := gob.NewDecoder(buff)
 	if err := dec.Decode(&payload); err != nil {
-		log.Error("Tx sync aborted: failed to decode request")
+		log.Error("❌ Transaction handling aborted — failed to decode Tx payload")
 		return
 	}
 
 	buf := bytes.NewBuffer(payload.Transaction)
-
 	newTx := blockchain.DeserializeTxData(buf)
 
-	txInfo := memopool.GetTxInfo(newTx, net.Blockchain)
-	if txInfo == nil {
-		log.Error("Tx rejected: invalid transaction data")
+	if !net.syncCompleted {
+		net.Gossip.Broadcast(
+			net.FullNodesChannel.ListPeers(),
+			[]string{
+				net.Host.ID().String(),
+			},
+			func(p peer.ID) {
+				net.SendTx(
+					p.String(),
+					newTx,
+				)
+				net.Gossip.MarkSeen(hex.EncodeToString(newTx.ID), p.String())
+			},
+		)
+
 		return
 	}
 
-	MemoryPool.Add(*txInfo)
-	log.Infof("Tx accepted → Mempool size: %d", len(MemoryPool.Pending))
+	txID := hex.EncodeToString(newTx.ID)
+	if !MemoryPool.HasTX(txID) {
+		txInfo := memopool.GetTxInfo(newTx, net.Blockchain)
+		if txInfo == nil {
+			log.Error("🚫 Transaction rejected — invalid or failed validation")
+			return
+		}
 
-	if !net.Gossip.HasSeen(hex.EncodeToString(newTx.ID), payload.SendFrom) {
+		MemoryPool.Add(*txInfo)
+		log.Infof("✅ Transaction accepted and added to mempool — current size: %d", len(MemoryPool.Pending))
+
+	}
+
+	if !net.Gossip.HasSeen(txID, payload.SendFrom) {
 		net.Gossip.Broadcast(
 			net.FullNodesChannel.ListPeers(),
 			[]string{
@@ -117,9 +155,10 @@ func (net *Network) HandleTx(content *ChannelContent) {
 			},
 			func(p peer.ID) {
 				net.SendTx(p.String(), newTx)
+				net.Gossip.MarkSeen(txID, payload.SendFrom)
 			},
 		)
-		log.Info("Tx broadcasted to peers")
+		log.Infof("📡 Broadcasted transaction to peers (origin: %s)", payload.SendFrom)
 	}
 }
 
@@ -258,7 +297,7 @@ func (net *Network) HandleGetHeaderSync(content *ChannelContent) {
 		)
 		bestPeer := net.syncManager.GetTargetPeer()
 
-		if bestPeer != nil && bestPeer.Height == bestHeight {
+		if bestPeer != nil && bestPeer.Height >= bestHeight {
 			log.Infof("✅ Header sync completed: peer %s chain matches local best height %d",
 				payload.SendFrom, bestHeight)
 			net.syncCompleted = true
@@ -306,10 +345,16 @@ func (net *Network) HandleGetHeaderSync(content *ChannelContent) {
 		log.Infof("Header sync: received %d headers from best peer %s, requesting full blocks for these headers",
 			len(hashes), payload.SendFrom)
 
-		net.SendGetDataSync(payload.SendFrom, NetGetDataSync{
-			SendFrom: net.Host.ID().String(),
-			Hashes:   hashes,
-		})
+		if bestHeight < bestPeer.Height {
+			net.SendGetDataSync(payload.SendFrom, NetGetDataSync{
+				SendFrom: net.Host.ID().String(),
+				Hashes:   hashes,
+			})
+		} else {
+			net.syncCompleted = true
+			log.Infof("✅ Header sync completed: peer %s chain matches local best height %d",
+				payload.SendFrom, bestHeight)
+		}
 
 	} else {
 		log.Infof("Header sync skipped: peer %s chain has less work than current best peer",
@@ -454,7 +499,7 @@ func (net *Network) HandleGetBlockData(content *ChannelContent) {
 		return
 	}
 
-	log.Infof("[HandleGetBlockData] 🗂️ UTXO set recomputed successfully after block %x", block.Hash[:6])
+	log.Infof("[HandleGetBlockData] UTXO set recomputed successfully after block %x", block.Hash[:6])
 
 	log.Infof("[HandleGetBlockData] Broadcasting block header hash=%x height=%d to peers (excluding sender=%s)", block.Hash[:6], block.Height, payload.SendFrom)
 	net.Gossip.Broadcast(
@@ -499,6 +544,10 @@ func (net *Network) HandleGetData(content *ChannelContent) {
 }
 
 func (net *Network) HandleGetHeader(content *ChannelContent) {
+	if !net.syncCompleted {
+		return
+	}
+
 	buf := new(bytes.Buffer)
 	var payload NetHeader
 
@@ -506,31 +555,34 @@ func (net *Network) HandleGetHeader(content *ChannelContent) {
 	dec := gob.NewDecoder(buf)
 	err := dec.Decode(&payload)
 	if err != nil {
-		log.Error("Failed to decode header request")
+		log.Error("Failed to decode header request payload")
 		return
 	}
 
 	exists, err := net.Blockchain.HasBlock(payload.Hash)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Error checking block existence: %v", err)
 		return
 	}
 
 	lastBlock, err := net.Blockchain.GetLastBlock()
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Error retrieving last block: %v", err)
 		return
 	}
 
-	if exists {
-		blockHash := hex.EncodeToString(payload.Hash)
-		log.Infof("Header received for existing block %x", payload.Hash[:6])
+	shortHash := fmt.Sprintf("%x", payload.Hash[:6])
+	peerID := payload.SendFrom
 
-		if !net.Gossip.HasSeen(blockHash, payload.SendFrom) {
+	if exists {
+		log.Infof("Received header for existing block [%s] from peer [%s]", shortHash, peerID)
+
+		blockHash := hex.EncodeToString(payload.Hash)
+		if !net.Gossip.HasSeen(blockHash, peerID) {
 			net.Gossip.Broadcast(
 				net.FullNodesChannel.ListPeers(),
 				[]string{
-					payload.SendFrom,
+					peerID,
 					net.Host.ID().String(),
 				},
 				func(p peer.ID) {
@@ -540,31 +592,40 @@ func (net *Network) HandleGetHeader(content *ChannelContent) {
 						PrevHash: payload.PrevHash,
 						SendFrom: net.Host.ID().String(),
 					})
-					net.Gossip.MarkSeen(blockHash, payload.SendFrom)
+					net.Gossip.MarkSeen(blockHash, peerID)
 				},
 			)
+			log.Debugf("Broadcasted header [%s] to peers (origin: %s)", shortHash, peerID)
+		} else {
+			log.Debugf("Header [%s] from peer [%s] already seen — ignoring", shortHash, peerID)
 		}
 
 	} else {
 		if bytes.Equal(lastBlock.Hash, payload.PrevHash) {
-			log.Infof("Requesting full block %s from peer %s", hex.EncodeToString(payload.Hash), payload.SendFrom)
-			net.SendGetData(payload.SendFrom, NetGetData{
+			log.Infof("Header [%s] links to last known block — requesting full block from peer [%s]", shortHash, peerID)
+			net.SendGetData(peerID, NetGetData{
 				SendFrom: net.Host.ID().String(),
 				Height:   payload.Height,
 				Hash:     payload.Hash,
 			})
 		} else if payload.Height > lastBlock.Height+1 {
-			log.Warnf("Header %x indicates peer is ahead (height %d vs local %d), requesting locator...", payload.Hash[:6], payload.Height, lastBlock.Height)
+			log.Warnf("Peer [%s] is ahead — header [%s] indicates height %d vs local %d. Requesting block locator...",
+				peerID, shortHash, payload.Height, lastBlock.Height)
+
 			locator, err := net.Blockchain.GetBlockLocator()
 			if err != nil {
-				log.Error(err)
+				log.Errorf("Error building block locator: %v", err)
 				return
 			}
+
 			net.syncCompleted = false
-			net.SendHeaderLocator(payload.SendFrom, NetHeaderLocator{
+			net.SendHeaderLocator(peerID, NetHeaderLocator{
 				SendFrom: net.Host.ID().String(),
 				Locator:  locator,
 			})
+			log.Infof("Sent header locator request to peer [%s]", peerID)
+		} else {
+			log.Debugf("Received non-continuous header [%s] from peer [%s] — no action taken", shortHash, peerID)
 		}
 	}
 }
@@ -577,7 +638,7 @@ func (net *Network) HandleGetTransactions(content *ChannelContent) {
 	dec := gob.NewDecoder(buf)
 	err := dec.Decode(&payload)
 	if err != nil {
-		log.Error("Error decoding get transaction from pool request: ", err)
+		log.Errorf("TxPool sync aborted: failed to decode full transaction data from peer: %v", err)
 		return
 	}
 
@@ -585,12 +646,16 @@ func (net *Network) HandleGetTransactions(content *ChannelContent) {
 		return
 	}
 
-	for _, tx := range payload.Transactions {
+	for i, tx := range payload.Transactions {
+		txID := hex.EncodeToString(tx.ID)
 		txInfo := memopool.GetTxInfo(&tx, net.Blockchain)
-		if txInfo != nil {
+		if txInfo != nil && !MemoryPool.HasTX(txID) {
 			MemoryPool.Add(*txInfo)
+			log.Debugf("TxPool sync: [%d/%d] added transaction %s to local mempool",
+				i+1, len(payload.Transactions), txID)
 		}
 	}
+
 }
 
 func (net *Network) HandleGetDataTx(content *ChannelContent) {
@@ -601,7 +666,7 @@ func (net *Network) HandleGetDataTx(content *ChannelContent) {
 	dec := gob.NewDecoder(buf)
 	err := dec.Decode(&payload)
 	if err != nil {
-		log.Error("Error decoding get transaction from pool request: ", err)
+		log.Errorf("TxPool sync aborted: failed to decode get transaction request from peer: %v", err)
 		return
 	}
 
@@ -612,6 +677,7 @@ func (net *Network) HandleGetDataTx(content *ChannelContent) {
 		tx := MemoryPool.GetTxByID(txID)
 		if tx != nil {
 			txs = append(txs, *tx)
+
 		}
 	}
 
@@ -622,6 +688,7 @@ func (net *Network) HandleGetDataTx(content *ChannelContent) {
 			Transactions: txs,
 		},
 	)
+
 }
 
 func (net *Network) HandleGetTxPoolInv(content *ChannelContent) {
@@ -631,29 +698,19 @@ func (net *Network) HandleGetTxPoolInv(content *ChannelContent) {
 	buf.Write(content.Payload[commandLength:])
 	dec := gob.NewDecoder(buf)
 	if err := dec.Decode(&payload); err != nil {
-		log.Error("TxPool sync aborted: failed to decode transaction inventory from peer")
 		return
 	}
-
-	log.Infof("TxPool sync: received tx inventory with %d hashes from peer %s",
-		len(payload.TxHashes), payload.SendFrom)
 
 	txHashes := make([][]byte, 0)
 
 	for _, txHash := range payload.TxHashes {
 		txID := hex.EncodeToString(txHash)
-		if !MemoryPool.HashTX(txID) {
+		if !MemoryPool.HasTX(txID) {
 			txHashes = append(txHashes, txHash)
-			log.Debugf("TxPool sync: missing transaction hash %s, will request full tx from peer %s",
-				txID, payload.SendFrom)
-		} else {
-			log.Tracef("TxPool sync: transaction hash %s already exists in local mempool, skip request", txID)
 		}
 	}
 
 	if len(txHashes) > 0 {
-		log.Infof("TxPool sync: requesting %d full transactions from peer %s",
-			len(txHashes), payload.SendFrom)
 
 		net.SendGetDataTransaction(
 			payload.SendFrom,
@@ -662,21 +719,20 @@ func (net *Network) HandleGetTxPoolInv(content *ChannelContent) {
 				TxHashes: txHashes,
 			},
 		)
-	} else {
-		log.Infof("TxPool sync: all %d transactions already in mempool, nothing to request from peer %s",
-			len(payload.TxHashes), payload.SendFrom)
+
 	}
+
 }
 
 func (net *Network) HandleGetTxFromPool(content *ChannelContent) {
 	buf := new(bytes.Buffer)
-	var payload *TxFromPool
+	var payload TxFromPool
 
 	buf.Write(content.Payload[commandLength:])
 	dec := gob.NewDecoder(buf)
 	err := dec.Decode(&payload)
 	if err != nil {
-		log.Error("Error decoding get transaction from pool request: ", err)
+		log.Errorf("❌ Failed to decode 'GetTxFromPool' request: %v", err)
 		return
 	}
 
@@ -687,6 +743,7 @@ func (net *Network) HandleGetTxFromPool(content *ChannelContent) {
 		net.SendTxPoolInv(payload.SendFrom, [][]byte{})
 	}
 }
+
 func HandleEvents(net *Network) {
 	for {
 		select {
@@ -725,7 +782,7 @@ func HandleEvents(net *Network) {
 				}
 
 				MemoryPool.Add(*txInfo)
-				log.Infof("Transaction %s added to mempool, broadcasting to peers...", txHash)
+				log.Infof("Transaction %s and fee %f added to mempool, broadcasting to peers...", txHash, txInfo.Fee)
 
 				net.Gossip.Broadcast(
 					net.FullNodesChannel.ListPeers(),

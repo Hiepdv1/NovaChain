@@ -4,6 +4,7 @@ import (
 	"ChainServer/internal/app/module/chain"
 	"ChainServer/internal/common/constants"
 	"ChainServer/internal/common/dto"
+	"ChainServer/internal/common/env"
 	"ChainServer/internal/common/helpers"
 	"ChainServer/internal/common/utils"
 	"ChainServer/internal/db"
@@ -11,13 +12,13 @@ import (
 	dbPendingTx "ChainServer/internal/db/pendingTx"
 	dbutxo "ChainServer/internal/db/utxo"
 	dbwallet "ChainServer/internal/db/wallet"
+	"ChainServer/internal/states"
 	"context"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
-	"slices"
 	"strconv"
 	"time"
 
@@ -51,7 +52,7 @@ func (j *jobBlockSync) handleCreateUtxo(block *chain.Block, sqlTx *sql.Tx) error
 			params := dbutxo.CreateUTXOParams{
 				TxID:        tx.ID,
 				OutputIndex: int64(idx),
-				Value:       helpers.FormatDecimal(out.Value, 10),
+				Value:       fmt.Sprintf("%f", out.Value),
 				PubKeyHash:  out.PubKeyHash,
 				BlockID:     block.Hash,
 			}
@@ -214,24 +215,18 @@ func (j *jobBlockSync) handleCreateInput(ins []dto.TxInput, b_id, txHash string,
 				return err
 			}
 
-			value, err := strconv.ParseFloat(txoutput.Value, 64)
-			if err != nil {
-				log.Errorf("handleCreateInput: Failed to parse value=%s for input in tx=%s block=%s: %v", txoutput.Value, txHash, b_id, err)
-				return err
-			}
-
-			log.Debugf("handleCreateInput: Decreasing wallet balance for wallet=%s by value=%f for input in tx=%s block=%s", wallet.Address.String, value, txHash, b_id)
+			log.Debugf("handleCreateInput: Decreasing wallet balance for wallet=%s by value=%s for input in tx=%s block=%s", wallet.Address.String, txoutput.Value, txHash, b_id)
 			err = j.dbWallet.DecreaseWalletBalance(ctx, dbwallet.DecreaseWalletBalanceParams{
-				Balance:   fmt.Sprintf("%.8f", value),
+				Balance:   txoutput.Value,
 				Address:   wallet.Address,
 				PublicKey: wallet.PublicKey,
 			}, tx)
 
 			if err != nil {
-				log.Errorf("handleCreateInput: Failed to decrease wallet balance for wallet=%s pubkey=%s in tx=%s block=%s by %f: %v", wallet.Address.String, in.PubKey, txHash, b_id, value, err)
+				log.Errorf("handleCreateInput: Failed to decrease wallet balance for wallet=%s pubkey=%s in tx=%s block=%s by %s: %v", wallet.Address.String, in.PubKey, txHash, b_id, txoutput.Value, err)
 				return err
 			}
-			log.Infof("handleCreateInput: Successfully decreased wallet balance for wallet=%s by %f in tx=%s block=%s", wallet.Address.String, value, txHash, b_id)
+			log.Infof("handleCreateInput: Successfully decreased wallet balance for wallet=%s by %s in tx=%s block=%s", wallet.Address.String, txoutput.Value, txHash, b_id)
 		}
 	}
 
@@ -279,7 +274,7 @@ func (j *jobBlockSync) handleCreateOutput(outs []dto.TxOutput, b_id, txHash stri
 
 		args := dbchain.CreateTxOutputParams{
 			TxID:       txHash,
-			Value:      fmt.Sprintf("%.8f", out.Value),
+			Value:      fmt.Sprintf("%f", out.Value),
 			PubKeyHash: out.PubKeyHash,
 			Index:      int64(Index),
 			BID:        b_id,
@@ -297,7 +292,7 @@ func (j *jobBlockSync) handleCreateOutput(outs []dto.TxOutput, b_id, txHash stri
 		err = j.dbWallet.IncreaseWalletBalanceByPubKeyHash(
 			ctx,
 			dbwallet.IncreaseWalletBalanceByPubKeyHashParams{
-				Balance:       fmt.Sprintf("%.8f", out.Value),
+				Balance:       fmt.Sprintf("%f", out.Value),
 				PublicKeyHash: wallet.PublicKeyHash,
 			},
 			tx,
@@ -320,8 +315,8 @@ func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*dto.
 		log.Debugf("handleCreateTransactions: Processing tx=%s in block=%s (isMiner=%v, inputs=%d, outputs=%d)", tx.ID, block.Hash, j.isTxMiner(tx), len(tx.Inputs), len(tx.Outputs))
 		fromHash := ""
 		toHash := ""
-		amount := 0.0
-		fee := 0.0
+		amount := utils.NewCoinAmountFromFloat(0.0)
+		fee := utils.NewCoinAmountFromFloat(0.0)
 
 		if !j.isTxMiner(tx) {
 			pubKeyBytes, err := hex.DecodeString(tx.Inputs[0].PubKey)
@@ -332,7 +327,7 @@ func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*dto.
 			fromHash = hex.EncodeToString(utils.PublicKeyHash(pubKeyBytes))
 			log.Debugf("handleCreateTransactions: Set fromHash=%s for tx=%s block=%s", fromHash, tx.ID, block.Hash)
 
-			totalInput := 0.0
+			totalInput := utils.NewCoinAmountFromFloat(0.0)
 
 			for _, in := range tx.Inputs {
 				utxo, err := j.dbUtxo.GetUTXOByTxIDAndOut(ctx, dbutxo.GetUTXOByTxIDAndOutParams{
@@ -351,22 +346,22 @@ func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*dto.
 					return err
 				}
 
-				totalInput += value
+				totalInput = totalInput.Add(utils.NewCoinAmountFromFloat(value))
 				log.Debugf("handleCreateTransactions: Added input value=%f for TxID=%s Out=%d in tx=%s block=%s (totalInput=%f)", value, in.ID, in.Out, tx.ID, block.Hash, totalInput)
 			}
 
-			totalOutput := 0.0
+			totalOutput := utils.NewCoinAmountFromFloat(0.0)
 
 			for _, out := range tx.Outputs {
 				if out.PubKeyHash != fromHash {
 					toHash = out.PubKeyHash
-					amount += out.Value
+					amount = amount.Add(utils.NewCoinAmountFromFloat(out.Value))
 				}
-				totalOutput += out.Value
+				totalOutput = totalOutput.Add(utils.NewCoinAmountFromFloat(out.Value))
 				log.Debugf("handleCreateTransactions: Processed output value=%f pubKeyHash=%s (toHash=%s amount=%f totalOutput=%f) in tx=%s block=%s", out.Value, out.PubKeyHash, toHash, amount, totalOutput, tx.ID, block.Hash)
 			}
 
-			fee = totalInput - totalOutput
+			fee = utils.SumFees(totalInput, totalOutput)
 			log.Infof("handleCreateTransactions: Calculated for tx=%s block=%s: from=%s to=%s amount=%f fee=%f totalInput=%f totalOutput=%f", tx.ID, block.Hash, fromHash, toHash, amount, fee, totalInput, totalOutput)
 		} else {
 			log.Infof("handleCreateTransactions: Skipping fee/amount calc for miner tx=%s in block=%s", tx.ID, block.Hash)
@@ -377,8 +372,8 @@ func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*dto.
 			BID:      block.Hash,
 			Fromhash: helpers.StringToNullString(fromHash),
 			Tohash:   helpers.StringToNullString(toHash),
-			Amount:   helpers.FloatToNullString(amount),
-			Fee:      helpers.FloatToNullString(fee),
+			Amount:   helpers.FloatToNullString(amount.ToFloat()),
+			Fee:      helpers.FloatToNullString(fee.ToFloat()),
 			CreateAt: block.Timestamp,
 		}
 
@@ -484,388 +479,190 @@ func (j *jobBlockSync) isGenesisBlock(block *chain.Block) bool {
 func (j *jobBlockSync) isTxMiner(tx *dto.Transaction) bool {
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
 }
-
-func (j *jobBlockSync) handleReorganization(block *chain.Block, sqlTx *sql.Tx) error {
+func (j *jobBlockSync) handleReorganizationBlocks(tx *sql.Tx) error {
+	log.Info("🔁 [Reorg] Starting chain reorganization...")
 	ctx := context.Background()
-	log.Infof("handleReorganization: Starting reorganization triggered by new block hash=%s height=%d", block.Hash, block.Height)
-	lastBlock, err := j.dbChain.GetLastBlock(ctx, sqlTx)
-	if err != nil && errors.Is(err, sql.ErrNoRows) {
-		log.Warnf("handleReorganization: No last block found during reorganization for new block=%s", block.Hash)
-		return err
-	} else if err != nil {
-		log.Errorf("handleReorganization: Failed to get last block during reorganization for new block=%s: %v", block.Hash, err)
-		return err
-	}
-	log.Debugf("handleReorganization: Current last block hash=%s height=%d", lastBlock.BID, lastBlock.Height)
 
-	oldChain := make([]dbchain.Block, 0)
-
-	currentBlock := lastBlock
-
-	for {
-		oldChain = append(oldChain, currentBlock)
-		log.Debugf("handleReorganization: Added to old chain: block=%s height=%d prevHash=%s", currentBlock.BID, currentBlock.Height, currentBlock.PrevHash.String)
-
-		nextBlock, err := j.dbChain.GetBlockByHash(ctx, currentBlock.PrevHash.String, sqlTx)
-
-		if err != nil {
-			log.Errorf("handleReorganization: Failed to get prev block=%s during reorganization for new block=%s: %v", currentBlock.PrevHash.String, block.Hash, err)
-			return err
-		}
-
-		if nextBlock.BID == block.PrevHash || !currentBlock.PrevHash.Valid {
-			log.Debugf("handleReorganization: Reached fork point at block=%s (new block prev=%s)", nextBlock.BID, block.PrevHash)
-			break
-		}
-
-		currentBlock = nextBlock
-	}
-
-	log.Infof("handleReorganization: Identified %d blocks to rollback for reorganization (new block=%s): %v", len(oldChain), block.Hash, oldChain)
-
-	for i, blk := range oldChain {
-		log.Infof("handleReorganization: Rolling back block %d/%d: hash=%s height=%d in reorganization (new block=%s)", i+1, len(oldChain), blk.BID, blk.Height, block.Hash)
-
-		if err := j.handleReorganizationUtxo(&blk, sqlTx); err != nil {
-			log.Errorf("handleReorganization: Failed to reorganize UTXOs for rollback block=%s height=%d (new block=%s): %v", blk.BID, blk.Height, block.Hash, err)
-			return err
-		}
-		log.Infof("handleReorganization: UTXOs reorganized for rollback block=%s height=%d", blk.BID, blk.Height)
-
-		transactions, err := j.dbTrans.GetFullTransactionByBlockHash(ctx, blk.BID, sqlTx)
-		if err != nil {
-			log.Errorf("handleReorganization: Failed to get %d transactions for rollback block=%s height=%d (new block=%s): %v", len(transactions), blk.BID, blk.Height, block.Hash, err)
-			return err
-		}
-		log.Debugf("handleReorganization: Found %d txs to rollback in block=%s height=%d", len(transactions), blk.BID, blk.Height)
-
-		for _, tx := range transactions {
-			log.Infof("handleReorganization: Rolling back tx=%s in rollback block=%s height=%d (new block=%s)", tx.TxID, blk.BID, blk.Height, block.Hash)
-
-			txInputs, err := j.dbTrans.GetListTxInputByTxID(ctx, tx.TxID)
-			if err != nil {
-				log.Errorf("handleReorganization: Failed to get inputs for tx=%s in rollback block=%s height=%d (new block=%s): %v", tx.TxID, blk.BID, blk.Height, block.Hash, err)
-				return err
-			}
-
-			for _, input := range txInputs {
-				if input.PubKey.Valid {
-					pubkey, err := hex.DecodeString(input.PubKey.String)
-					if err != nil {
-						log.Errorf("handleReorganization: Failed to decode pubkey=%s for input in tx=%s rollback block=%s height=%d (new block=%s): %v", input.PubKey.String, tx.TxID, blk.BID, blk.Height, block.Hash, err)
-						return fmt.Errorf("failed to decode pubkey: %v", err)
-					}
-
-					wallet, err := j.dbWallet.GetWalletByPubkey(ctx, pubkey, sqlTx)
-					if err != nil && errors.Is(err, sql.ErrNoRows) {
-						log.Warnf("handleReorganization: No wallet found for pubkey in input tx=%s rollback block=%s height=%d (new block=%s), skipping balance restore", tx.TxID, blk.BID, blk.Height, block.Hash)
-						continue
-					} else if err != nil {
-						log.Errorf("handleReorganization: Failed to get wallet for pubkey in input tx=%s rollback block=%s height=%d (new block=%s): %v", tx.TxID, blk.BID, blk.Height, block.Hash, err)
-						return err
-					}
-
-					prevOutput, err := j.dbTrans.GetTxOutputByTxIDAndIndex(ctx, dbchain.GetTxOutputByTxIDAndIndexParams{
-						TxID:  input.InputTxID.String,
-						Index: input.OutIndex,
-					}, sqlTx)
-
-					if err != nil {
-						log.Errorf("handleReorganization: Failed to get prev output for input TxID=%s Index=%d in tx=%s rollback block=%s height=%d (new block=%s): %v", input.InputTxID.String, input.OutIndex, tx.TxID, blk.BID, blk.Height, block.Hash, err)
-						return err
-					}
-
-					log.Debugf("handleReorganization: Restoring balance %s for wallet=%s in input tx=%s rollback block=%s height=%d", prevOutput.Value, wallet.Address.String, tx.TxID, blk.BID, blk.Height)
-					err = j.dbWallet.IncreaseWalletBalance(ctx, dbwallet.IncreaseWalletBalanceParams{
-						Balance:   prevOutput.Value,
-						Address:   wallet.Address,
-						PublicKey: wallet.PublicKey,
-					}, sqlTx)
-					if err != nil {
-						log.Errorf("handleReorganization: Failed to increase wallet balance %s for wallet=%s in input tx=%s rollback block=%s height=%d (new block=%s): %v", prevOutput.Value, wallet.Address.String, tx.TxID, blk.BID, blk.Height, block.Hash, err)
-						return err
-					}
-					log.Infof("handleReorganization: Restored balance %s for wallet=%s in input tx=%s rollback block=%s height=%d", prevOutput.Value, wallet.Address.String, tx.TxID, blk.BID, blk.Height)
-				}
-			}
-
-			txOutputs, err := j.dbTrans.GetListTxOutputByTxID(ctx, tx.TxID)
-			if err != nil {
-				log.Errorf("handleReorganization: Failed to get outputs for tx=%s in rollback block=%s height=%d (new block=%s): %v", tx.TxID, blk.BID, blk.Height, block.Hash, err)
-				return err
-			}
-
-			for _, output := range txOutputs {
-				if output.PubKeyHash != "" {
-					wallet, err := j.dbWallet.GetWalletByPubKeyHash(ctx, output.PubKeyHash, sqlTx)
-					if err != nil && errors.Is(err, sql.ErrNoRows) {
-						log.Warnf("handleReorganization: No wallet found for PubKeyHash=%s in output tx=%s rollback block=%s height=%d (new block=%s), skipping balance deduct", output.PubKeyHash, tx.TxID, blk.BID, blk.Height, block.Hash)
-						continue
-					} else if err != nil {
-						log.Errorf("handleReorganization: Failed to get wallet for PubKeyHash=%s in output tx=%s rollback block=%s height=%d (new block=%s): %v", output.PubKeyHash, tx.TxID, blk.BID, blk.Height, block.Hash, err)
-						return err
-					}
-
-					log.Debugf("handleReorganization: Deducting balance %s for wallet=%s in output tx=%s rollback block=%s height=%d", output.Value, wallet.Address.String, tx.TxID, blk.BID, blk.Height)
-					err = j.dbWallet.DecreaseWalletBalance(ctx, dbwallet.DecreaseWalletBalanceParams{
-						Balance:   output.Value,
-						Address:   wallet.Address,
-						PublicKey: wallet.PublicKey,
-					}, sqlTx)
-
-					if err != nil {
-						log.Errorf("handleReorganization: Failed to decrease wallet balance %s for wallet=%s in output tx=%s rollback block=%s height=%d (new block=%s): %v", output.Value, wallet.Address.String, tx.TxID, blk.BID, blk.Height, block.Hash, err)
-						return err
-					}
-					log.Infof("handleReorganization: Deducted balance %s for wallet=%s in output tx=%s rollback block=%s height=%d", output.Value, wallet.Address.String, tx.TxID, blk.BID, blk.Height)
-				}
-			}
-		}
-
-		err = j.dbChain.DeleteBlockByHash(ctx, blk.BID, sqlTx)
-		if err != nil {
-			log.Errorf("handleReorganization: Failed to delete rollback block=%s height=%d (new block=%s): %v", blk.BID, blk.Height, block.Hash, err)
-			return err
-		}
-		log.Infof("handleReorganization: Deleted rollback block=%s height=%d", blk.BID, blk.Height)
-	}
-
-	log.Infof("handleReorganization: Completed reorganization for new block hash=%s (rolled back %d blocks)", block.Hash, len(oldChain))
-	return nil
-}
-
-func (j *jobBlockSync) handleSwitchChain(block *chain.Block, tx *sql.Tx) error {
-	log.Infof("handleSwitchChain: Starting chain switch triggered by block hash=%s height=%d nChainWork=%s", block.Hash, block.Height, block.NChainWork)
-	newChain := make([]*chain.Block, 0)
-	newChain = append(newChain, block)
-	currentHash := block.PrevHash
-
-	for {
-		blk, err := j.dbChainRpc.GetBlockByHash(currentHash)
-		if err != nil {
-			log.Errorf("handleSwitchChain: Failed to fetch block by hash=%s during chain switch (new block=%s): %v", currentHash, block.Hash, err)
-			return err
-		}
-
-		exists, err := j.dbChain.ExistingBlock(context.Background(), blk.Hash, nil)
-		if err != nil {
-			log.Errorf("handleSwitchChain: Failed to check existence of block hash=%s during chain switch (new block=%s): %v", blk.Hash, block.Hash, err)
-			return err
-		}
-
-		if exists {
-			log.Infof("handleSwitchChain: Existing block hash=%s found during chain switch, stopping fetch (new block=%s)", blk.Hash, block.Hash)
-			break
-		}
-
-		newChain = append(newChain, blk)
-		currentHash = blk.PrevHash
-		log.Infof("handleSwitchChain: Added block hash=%s height=%d to new chain during switch (new block=%s)", blk.Hash, blk.Height, block.Hash)
-	}
-
-	slices.Reverse(newChain)
-	log.Infof("handleSwitchChain: New chain prepared with %d blocks for switch (first=%s last=%s new block=%s)", len(newChain), newChain[0].Hash, newChain[len(newChain)-1].Hash, block.Hash)
-
-	err := j.handleReorganization(newChain[0], tx)
+	locator, err := j.dbChain.GetBlockLocator(ctx, tx)
 	if err != nil {
-		log.Errorf("handleSwitchChain: Failed to reorganize for chain switch (new block=%s): %v", block.Hash, err)
+		log.Error("❌ [Reorg] Failed to get block locator: ", err)
 		return err
 	}
-	log.Infof("handleSwitchChain: Reorganization completed for chain switch (new block=%s)", block.Hash)
 
-	log.Infof("handleSwitchChain: Switching to new chain starting with hash=%s nChainWork=%s", block.Hash, block.NChainWork)
-
-	for i, blk := range newChain {
-		log.Infof("handleSwitchChain: Creating block %d/%d in new chain: hash=%s height=%d (new block=%s)", i+1, len(newChain), blk.Hash, blk.Height, block.Hash)
-		err := j.handleCreateBlock(blk, tx)
-		if err != nil {
-			log.Errorf("handleSwitchChain: Failed to create block hash=%s height=%d in new chain (new block=%s): %v", blk.Hash, blk.Height, block.Hash, err)
-			return err
-		}
-		err = j.handleCreateUtxo(blk, tx)
-		if err != nil {
-			log.Errorf("handleSwitchChain: Failed to create UTXOs for block hash=%s height=%d in new chain (new block=%s): %v", blk.Hash, blk.Height, block.Hash, err)
-			return err
-		}
-		log.Infof("handleSwitchChain: Successfully created block hash=%s height=%d and UTXOs in new chain", blk.Hash, blk.Height)
+	bestHeight, err := j.dbChain.GetBestHeight(ctx, tx)
+	if err != nil {
+		log.Error("❌ [Reorg] Failed to get best height: ", err)
+		return err
 	}
 
-	log.Infof("handleSwitchChain: Completed chain switch for block hash=%s (added %d new blocks)", block.Hash, len(newChain))
+	commonBlock, err := j.dbChainRpc.GetCommonBlock(locator)
+	if err != nil {
+		log.Error("❌ [Reorg] Failed to get common block from RPC: ", err)
+		return err
+	}
+
+	log.Infof("🔍 [Reorg] Common block found at height=%d (hash=%s)", commonBlock.Height, commonBlock.Hash)
+	log.Infof("🧹 [Reorg] Removing blocks from height=%d to height=%d...", commonBlock.Height, bestHeight)
+
+	err = j.dbChain.DeleteBlockByRangeHeight(ctx, commonBlock.Height, bestHeight, tx)
+	if err != nil {
+		log.Error("❌ [Reorg] Failed to delete old blocks: ", err)
+		return err
+	}
+
+	log.Info("✅ [Reorg] Chain reorganization completed successfully.")
 	return nil
 }
 
 func (j *jobBlockSync) handleSyncBlock(blocks []*chain.Block, tx *sql.Tx) error {
 	ctx := context.Background()
-	log.Infof("handleSyncBlock: Starting sync for %d blocks (range heights %d-%d)", len(blocks), blocks[0].Height, blocks[len(blocks)-1].Height)
+	start := blocks[0].Height
+	end := blocks[len(blocks)-1].Height
+	log.Infof("📦 [Sync] Starting block sync (%d blocks | heights %d → %d)", len(blocks), start, end)
 
 	for i := len(blocks) - 1; i >= 0; i-- {
 		block := blocks[i]
-		log.Infof("handleSyncBlock: Processing block %d/%d: hash=%s height=%d prevHash=%s nChainWork=%s", i+1, len(blocks), block.Hash, block.Height, block.PrevHash, block.NChainWork)
+		log.Infof("➡️ [Sync] Processing block #%d (height=%d | hash=%s)", len(blocks)-i, block.Height, block.Hash)
 
 		lastBlock, err := j.dbChain.GetLastBlock(ctx, tx)
 		if err != nil && errors.Is(err, sql.ErrNoRows) {
 			lastBlock = dbchain.Block{}
-			log.Debugf("handleSyncBlock: No last block in DB, treating as empty chain for block=%s height=%d", block.Hash, block.Height)
+			log.Debugf("ℹ️ [Sync] No last block found — treating as empty chain (block=%s height=%d)", block.Hash, block.Height)
 		} else if err != nil {
-			log.Errorf("handleSyncBlock: Failed to get last block while syncing block hash=%s height=%d: %v", block.Hash, block.Height, err)
+			log.Errorf("❌ [Sync] Failed to get last block (block=%s height=%d): %v", block.Hash, block.Height, err)
 			return err
 		}
 
 		exists, err := j.dbChain.ExistingBlock(ctx, block.Hash, tx)
 		if err != nil {
-			log.Errorf("handleSyncBlock: Failed to check existence of block hash=%s height=%d: %v", block.Hash, block.Height, err)
+			log.Errorf("❌ [Sync] Failed to check block existence (hash=%s): %v", block.Hash, err)
 			return err
 		}
-
 		if exists {
-			log.Infof("handleSyncBlock: Block hash=%s height=%d already exists, skipping", block.Hash, block.Height)
+			log.Debugf("⚠️ [Sync] Block already exists (hash=%s height=%d), skipping.", block.Hash, block.Height)
 			continue
 		}
 
 		if j.isGenesisBlock(block) {
-			log.Infof("handleSyncBlock: Processing genesis block hash=%s", block.Hash)
-			err := j.handleCreateBlock(block, tx)
-			if err != nil {
-				log.Errorf("handleSyncBlock: Failed to create genesis block hash=%s: %v", block.Hash, err)
+			log.Infof("🌱 [Sync] Found genesis block (hash=%s)", block.Hash)
+
+			if err := j.handleCreateBlock(block, tx); err != nil {
+				log.Errorf("❌ [Sync] Failed to create genesis block (hash=%s): %v", block.Hash, err)
 				return err
 			}
-			err = j.handleCreateTransactions(ctx, block.Transactions, block, tx)
-
-			if err != nil {
-				log.Errorf("handleSyncBlock: Failed to create transactions for genesis block hash=%s: %v", block.Hash, err)
+			if err := j.handleCreateTransactions(ctx, block.Transactions, block, tx); err != nil {
+				log.Errorf("❌ [Sync] Failed to create genesis transactions (hash=%s): %v", block.Hash, err)
+				return err
+			}
+			if err := j.handleCreateUtxo(block, tx); err != nil {
+				log.Errorf("❌ [Sync] Failed to create genesis UTXO (hash=%s): %v", block.Hash, err)
 				return err
 			}
 
-			err = j.handleCreateUtxo(block, tx)
-
-			if err != nil {
-				log.Errorf("handleSyncBlock: Failed to create UTXOs for genesis block hash=%s: %v", block.Hash, err)
-				return err
-			}
-			log.Infof("handleSyncBlock: Completed processing genesis block hash=%s", block.Hash)
+			log.Info("✅ [Sync] Genesis block processed successfully.")
 			continue
-		} else {
-			existsPrevBlock, err := j.dbChain.ExistingBlock(ctx, block.PrevHash, tx)
-			if err != nil {
-				log.Errorf("handleSyncBlock: Failed to check prev block hash=%s existence for block hash=%s height=%d: %v", block.PrevHash, block.Hash, block.Height, err)
-				return err
-			}
-
-			if !existsPrevBlock {
-				log.Warnf("handleSyncBlock: PrevHash=%s not exist for block hash=%s height=%d, skipping sync", block.PrevHash, block.Hash, block.Height)
-				return nil
-			}
-			log.Infof("handleSyncBlock: Prev block hash=%s exists for block hash=%s height=%d", block.PrevHash, block.Hash, block.Height)
 		}
 
-		lastBlockNChainWork := big.NewInt(0)
-		lastBlockNChainWork.SetString(lastBlock.NchainWork, 10)
+		lastBlockWork := big.NewInt(0)
+		lastBlockWork.SetString(lastBlock.NchainWork, 10)
 
-		if block.NChainWork.Cmp(lastBlockNChainWork) > 0 {
-			log.Infof("handleSyncBlock: Block hash=%s height=%d has higher chain work than last block (%s > %s), proceeding to add", block.Hash, block.Height, block.NChainWork, lastBlock.NchainWork)
-			_, err = j.dbChain.GetBlockByHash(ctx, block.PrevHash, tx)
-			if err != nil {
+		if block.NChainWork.Cmp(lastBlockWork) > 0 {
+			log.Infof("🔗 [Sync] Stronger block found (hash=%s height=%d)", block.Hash, block.Height)
+
+			if _, err := j.dbChain.GetBlockByHash(ctx, block.PrevHash, tx); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					log.Infof("handleSyncBlock: Prev block hash=%s not found in DB for block hash=%s height=%d, initiating chain switch", block.PrevHash, block.Hash, block.Height)
-					if err := j.handleSwitchChain(block, tx); err != nil {
-						log.Errorf("handleSyncBlock: Failed chain switch for block hash=%s height=%d: %v", block.Hash, block.Height, err)
+					log.Warnf("⚠️ [Sync] Missing previous block (prevHash=%s) → triggering reorganization", block.PrevHash)
+					if err := j.handleReorganizationBlocks(tx); err != nil {
+						log.Errorf("❌ [Sync] Reorganization failed (block=%s height=%d): %v", block.Hash, block.Height, err)
 						return err
 					}
-					continue
+					break
 				}
-				log.Errorf("handleSyncBlock: Failed to get prev block hash=%s for block hash=%s height=%d: %v", block.PrevHash, block.Hash, block.Height, err)
-				return err
-			}
-			log.Debugf("handleSyncBlock: Confirmed prev block hash=%s exists for block hash=%s height=%d", block.PrevHash, block.Hash, block.Height)
-
-			err := j.handleCreateBlock(block, tx)
-			if err != nil {
-				log.Errorf("handleSyncBlock: Failed to create block hash=%s height=%d: %v", block.Hash, block.Height, err)
+				log.Errorf("❌ [Sync] Failed to fetch previous block (prevHash=%s): %v", block.PrevHash, err)
 				return err
 			}
 
-			err = j.handleCreateTransactions(ctx, block.Transactions, block, tx)
-
-			if err != nil {
-				log.Errorf("handleSyncBlock: Failed to create transactions for block hash=%s height=%d: %v", block.Hash, block.Height, err)
+			if err := j.handleCreateBlock(block, tx); err != nil {
+				log.Errorf("❌ [Sync] Failed to store block (hash=%s): %v", block.Hash, err)
+				return err
+			}
+			if err := j.handleCreateTransactions(ctx, block.Transactions, block, tx); err != nil {
+				log.Errorf("❌ [Sync] Failed to store block transactions (hash=%s): %v", block.Hash, err)
+				return err
+			}
+			if err := j.handleCreateUtxo(block, tx); err != nil {
+				log.Errorf("❌ [Sync] Failed to store UTXOs (hash=%s): %v", block.Hash, err)
 				return err
 			}
 
-			err = j.handleCreateUtxo(block, tx)
-
-			if err != nil {
-				log.Errorf("handleSyncBlock: Failed to create UTXOs for block hash=%s height=%d: %v", block.Hash, block.Height, err)
-				return err
-			}
-			log.Infof("handleSyncBlock: Successfully added block hash=%s height=%d to chain", block.Hash, block.Height)
-
+			log.Infof("✅ [Sync] Block added successfully (height=%d hash=%s)", block.Height, block.Hash)
 		} else {
-			log.Warnf("handleSyncBlock: Block hash=%s height=%d chain work not higher than last (%s <= %s), skipping", block.Hash, block.Height, block.NChainWork, lastBlock.NchainWork)
+			log.Warnf("⚠️ [Sync] Weaker chain detected (hash=%s height=%d) — skipping.", block.Hash, block.Height)
 		}
 	}
 
-	log.Infof("handleSyncBlock: Completed sync for %d blocks", len(blocks))
+	log.Infof("🏁 [Sync] Completed block sync (%d blocks processed)", len(blocks))
 	return nil
 }
 
 func (j *jobBlockSync) StartBlockSync(interval time.Duration) {
-	log.Info("🔄 Chain sync started")
+	log.Info("🚀 [SyncLoop] Chain sync started")
 	ctx := context.Background()
-
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-
 		lastBlock, err := j.dbChain.GetLastBlock(ctx, nil)
 		if err != nil && errors.Is(err, sql.ErrNoRows) {
-			lastBlock = dbchain.Block{
-				Height: 1,
-			}
-			log.Warnf("StartBlockSync: No last block in DB, starting from height=1")
+			lastBlock = dbchain.Block{Height: 1}
+			log.Warn("⚠️ [SyncLoop] No last block found — starting from height=1")
 		} else if err != nil {
-			log.Errorf("❌ StartBlockSync: GetLastBlock error: %v", err)
+			log.Errorf("❌ [SyncLoop] Failed to get last block: %v", err)
 			continue
 		}
 
-		log.Infof("⏱️ StartBlockSync: Sync tick - current chain height=%d, fetching from height=%d", lastBlock.Height, lastBlock.Height+1)
+		log.Infof("🕒 [SyncLoop] Tick: currentHeight=%d → fetching next 100 blocks...", lastBlock.Height)
 
-		blocks, err := j.dbChainRpc.GetBlocksByHeightRange(lastBlock.Height, 10)
+		blocks, err := j.dbChainRpc.GetBlocksByHeightRange(lastBlock.Height, env.Cfg.Sync_block_batch_size)
 		if err != nil {
-			log.Errorf("❌ StartBlockSync: RPC call error for height range starting %d: %v", lastBlock.Height, err)
+			log.Errorf("❌ [SyncLoop] RPC error (startHeight=%d): %v", lastBlock.Height, err)
 			continue
 		}
-
 		if len(blocks) == 0 {
-			log.Warn("⚠️ StartBlockSync: No new blocks received from RPC")
+			log.Info("✅ [SyncLoop] No new blocks — chain is up-to-date.")
 			continue
 		}
 
-		log.Infof("📦 StartBlockSync: Received %d new blocks from RPC (heights %d to %d)", len(blocks), blocks[0].Height, blocks[len(blocks)-1].Height)
+		log.Infof("📥 [SyncLoop] Retrieved %d new blocks (heights %d → %d)", len(blocks), blocks[0].Height, blocks[len(blocks)-1].Height)
 
 		tx, err := db.Psql.BeginTx(ctx, nil)
 		if err != nil {
-			log.Errorf("❌ StartBlockSync: BeginTx error: %v", err)
+			log.Errorf("❌ [SyncLoop] Failed to start DB transaction: %v", err)
 			continue
 		}
-		log.Debugf("StartBlockSync: Started transaction for syncing %d blocks", len(blocks))
 
-		err = j.handleSyncBlock(blocks, tx)
-		if err != nil {
-			log.Errorf("❌ StartBlockSync: Sync block error for %d blocks: %v", len(blocks), err)
-			if err := tx.Rollback(); err != nil {
-				log.Errorf("❌ StartBlockSync: Rollback error after sync failure: %v", err)
+		log.Debugf("🧩 [SyncLoop] Transaction started for %d blocks", len(blocks))
+
+		if err := j.handleSyncBlock(blocks, tx); err != nil {
+			log.Errorf("❌ [SyncLoop] Sync failed: %v", err)
+			if rbErr := tx.Rollback(); rbErr != nil {
+				log.Errorf("❌ [SyncLoop] Rollback failed: %v", rbErr)
 			}
 			continue
 		}
 
 		if err := tx.Commit(); err != nil {
-			log.Errorf("❌ StartBlockSync: Commit transaction error after sync: %v", err)
+			log.Errorf("❌ [SyncLoop] Commit failed: %v", err)
 			continue
 		}
 
-		log.Infof("✅ StartBlockSync: Sync complete - successfully added up to height=%d (%d blocks processed)", blocks[0].Height, len(blocks))
+		bestHeight, err := j.dbChain.GetBestHeight(ctx, nil)
+		if err != nil {
+			log.Errorf("⚠️ [SyncLoop] Failed to fetch best height: %v", err)
+		} else {
+			states.ChainSyncState.SyncStatus = utils.EvaluateSyncStatus(bestHeight, blocks[0].Height)
+		}
 
+		log.Infof("🎯 [SyncLoop] Sync successful → bestHeight=%d (processed %d blocks)", bestHeight, len(blocks))
 	}
-
 }

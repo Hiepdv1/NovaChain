@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -21,8 +22,8 @@ func NewProof(b *Block) *ProofOfWork {
 
 	pow := &ProofOfWork{b, target}
 
-	log.Infof("Target: %x\n", target)
-	log.Infof("NBits: %d\n", b.NBits)
+	log.Infof("Target: %x", target)
+	log.Infof("NBits: %d", b.NBits)
 
 	return pow
 }
@@ -62,7 +63,7 @@ func (pow *ProofOfWork) Validate() bool {
 
 }
 
-func (pow *ProofOfWork) Run(ctx context.Context) (*int64, []byte, error) {
+func (pow *ProofOfWork) Run(ctx context.Context) (int64, []byte, error) {
 	var initHash big.Int
 	var hash [32]byte
 	var nonce int64
@@ -70,25 +71,25 @@ func (pow *ProofOfWork) Run(ctx context.Context) (*int64, []byte, error) {
 	for nonce = range math.MaxInt64 {
 		select {
 		case <-ctx.Done():
-			return nil, nil, nil
+			return 0, nil, fmt.Errorf("POW: mining stopped manually or context canceled")
 		default:
 			info, err := pow.InitData(nonce)
 			if err != nil {
-				return nil, nil, err
+				return 0, nil, fmt.Errorf("POW: failed to initialize data for nonce %d: %w", nonce, err)
 			}
-			hash = sha256.Sum256(info)
 
-			log.Infof("Pow: \r%x", hash)
+			hash = sha256.Sum256(info)
 			initHash.SetBytes(hash[:])
 
 			if initHash.Cmp(pow.Target) == -1 {
 				log.Infoln("---------------- Found! ----------------")
-				return &nonce, hash[:], err
+				log.Infof("POW: valid hash found! Nonce=%d, Hash=%x", nonce, hash)
+				return nonce, hash[:], nil
 			}
 		}
 	}
 
-	return nil, nil, nil
+	return 0, nil, fmt.Errorf("POW: reached max nonce (%d) without finding a valid hash", math.MaxInt64)
 }
 
 func ToByte(num int64) []byte {

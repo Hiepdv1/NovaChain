@@ -5,6 +5,41 @@ import { useNetworkOverview } from '../hooks/useDashboardQuery';
 import NetworkOverviewSkeleton from './NetworkOverviewSkeleton';
 import ErrorState from '@/components/errorState';
 
+import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+
+interface TrendIndicatorProps {
+  trend: 'increase' | 'decrease' | 'stable';
+  value: string;
+}
+
+const TrendIndicator = ({ trend, value }: TrendIndicatorProps) => {
+  const colorTrend = (() => {
+    switch (trend) {
+      case 'increase':
+        return 'text-emerald-600 dark:text-emerald-400';
+      case 'decrease':
+        return 'text-rose-400 dark:text-rose-500';
+      default:
+        return 'text-sky-600 dark:text-sky-400';
+    }
+  })();
+
+  const Icon =
+    trend === 'increase'
+      ? ArrowUpRight
+      : trend === 'decrease'
+      ? ArrowDownRight
+      : Minus;
+
+  return (
+    <p className={`text-xs ${colorTrend} mt-1 flex items-center`}>
+      {trend === 'increase' ? '+' : ''}
+      <span className="font-medium">{value}</span>
+      <Icon className="w-4 h-4 ml-1" />
+    </p>
+  );
+};
+
 const OverviewComponent = () => {
   const { data, isLoading, isError, isFetching, refetch, error } =
     useNetworkOverview();
@@ -71,9 +106,10 @@ const OverviewComponent = () => {
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
             {overview.Hashrate.Value}
           </p>
-          <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-            +{overview.Hashrate.Per24H} 24h
-          </p>
+          <TrendIndicator
+            trend={overview.Hashrate.Trend}
+            value={overview.Hashrate.ChangeRate}
+          />
         </div>
 
         <div className="glass-card bg-gradient-glass dark:bg-gradient-glass-dark rounded-2xl p-6 border border-white/20 dark:border-gray-700/50 hover-lift">

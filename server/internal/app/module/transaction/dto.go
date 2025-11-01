@@ -150,3 +150,8 @@ type GetTransactionSearchDto struct {
 	Search_Tx_Query string `query:"q" validate:"omitempty"`
 	dto.PaginationQuery
 }
+
+type GetTransactionPendingDto struct {
+	Status string `query:"status" validate:"required,gte=1"`
+	dto.PaginationQuery
+}

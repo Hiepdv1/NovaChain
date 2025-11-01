@@ -11,6 +11,8 @@ import ActivityLoadingSkeleton from './ActivityLoadingSkeleton';
 import { useCallback } from 'react';
 import { CACHE_TIME } from '@/shared/constants/ttl';
 import ErrorState from '@/components/errorState';
+import Link from 'next/link';
+import { useHistoryContext } from '@/components/providers/History-provider';
 
 const ActivityComponent = () => {
   const { data, isLoading, isFetching, isError, error, refetch } =
@@ -19,6 +21,15 @@ const ActivityComponent = () => {
       staleTime: 0,
       gcTime: CACHE_TIME,
     });
+
+  const { push } = useHistoryContext();
+
+  const onNavigate = () => {
+    push({
+      path: '/',
+      title: 'Back to home',
+    });
+  };
 
   const onRetry = useCallback(() => {
     refetch();
@@ -53,38 +64,42 @@ const ActivityComponent = () => {
           <div className="space-y-3">
             {activity.Blocks.map((item) => {
               return (
-                <div
+                <Link
+                  onClick={onNavigate}
                   key={item.BID}
-                  className="flex items-center justify-between p-3 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/40 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                  href={`/blocks/${item.BID}`}
+                  className="block"
                 >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                      <svg
-                        className="w-5 h-5 text-blue-600 dark:text-blue-400"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"></path>
-                      </svg>
+                  <div className="flex items-center justify-between p-3 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/40 dark:hover:bg-white/10 transition-colors cursor-pointer">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <svg
+                          className="w-5 h-5 text-blue-600 dark:text-blue-400"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"></path>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          #{item.Height}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {item.TxCount} txs • {FormatSize(item.Size)}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white">
-                        #{item.Height}
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {FormatTimestamp(item.Timestamp)}
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {item.TxCount} txs • {FormatSize(item.Size)}
+                      <p className="text-xs text-green-600 dark:text-green-400">
+                        {FormatHash(item.BID)}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {FormatTimestamp(item.Timestamp)}
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      {FormatHash(item.BID)}
-                    </p>
-                  </div>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -103,39 +118,43 @@ const ActivityComponent = () => {
           <div className="space-y-3">
             {activity.Txs.map((item) => {
               return (
-                <div
+                <Link
+                  onClick={onNavigate}
                   key={item.ID}
-                  className="flex items-center justify-between p-3 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/40 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                  href={`/txs/${item.TxID}`}
+                  className="block"
                 >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                      <svg
-                        className="w-5 h-5 text-green-600 dark:text-green-400"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414L15 8.414V14a1 1 0 11-2 0V9.414l-1.293 1.293a1 1 0 01-1.414-1.414L12 7.586H8z"></path>
-                      </svg>
+                  <div className="flex items-center justify-between p-3 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/40 dark:hover:bg-white/10 transition-colors cursor-pointer">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                        <svg
+                          className="w-5 h-5 text-green-600 dark:text-green-400"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414L15 8.414V14a1 1 0 11-2 0V9.414l-1.293 1.293a1 1 0 01-1.414-1.414L12 7.586H8z"></path>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          {FormatHash(item.TxID)}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {FormatHash(item.Fromhash.String)} →{' '}
+                          {FormatHash(item.Tohash.String)}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white font-mono text-sm">
-                        {FormatHash(item.TxID)}
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {FormatFloat(Number(item.Amount.String))} CCC
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {FormatHash(item.Fromhash.String)} →{' '}
-                        {FormatHash(item.Tohash.String)}
+                      <p className="text-xs text-green-600 dark:text-green-400">
+                        {FormatTimestamp(item.CreateAt)}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {FormatFloat(Number(item.Amount.String))} CCC
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      {FormatTimestamp(item.CreateAt)}
-                    </p>
-                  </div>
-                </div>
+                </Link>
               );
             })}
           </div>

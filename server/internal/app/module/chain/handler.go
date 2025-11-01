@@ -86,3 +86,18 @@ func (h *ChainHandler) GetBlockDetail(c *fiber.Ctx) error {
 		fiber.StatusOK,
 	)
 }
+
+func (h *ChainHandler) GetNetwork(c *fiber.Ctx) error {
+
+	networkInfo, appErr := h.service.GetNetwork()
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	return response.Success(
+		c,
+		networkInfo,
+		"Get network successfully",
+		fiber.StatusOK,
+	)
+}

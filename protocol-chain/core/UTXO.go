@@ -55,7 +55,7 @@ func (u *UTXOSet) FindUTXOPrefix(txID []byte) (*TxOutputs, []byte, error) {
 
 func (u *UTXOSet) FindSpendableOutputs(publicKeyHash []byte, amount float64) (float64, map[string][]int, error) {
 	unspentOuts := make(map[string][]int)
-	accumulated := float64(0)
+	accumulated := NewCoinAmountFromFloat(0.0)
 
 	err := u.Blockchain.Database.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -83,11 +83,12 @@ func (u *UTXOSet) FindSpendableOutputs(publicKeyHash []byte, amount float64) (fl
 			txID := hex.EncodeToString(bytes.TrimPrefix(key, prefix))
 
 			for outIdx, out := range outs.Outputs {
-				if out.IsLockWithKey(publicKeyHash) && accumulated < amount {
+				if out.IsLockWithKey(publicKeyHash) && accumulated.ToFloat() < amount {
 					unspentOuts[txID] = append(unspentOuts[txID], outIdx)
-					accumulated += out.Value
+					value := NewCoinAmountFromFloat(out.Value)
+					accumulated = accumulated.Add(value)
 
-					if accumulated >= amount {
+					if accumulated.ToFloat() >= amount {
 						break
 					}
 				}
@@ -101,7 +102,7 @@ func (u *UTXOSet) FindSpendableOutputs(publicKeyHash []byte, amount float64) (fl
 		return 0, nil, err
 	}
 
-	return accumulated, unspentOuts, nil
+	return accumulated.ToFloat(), unspentOuts, nil
 }
 
 func (u *UTXOSet) FindUnSpentTransactions(pubKeyHash []byte) ([]TxOutput, error) {

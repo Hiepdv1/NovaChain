@@ -25,6 +25,7 @@ type Config struct {
 	SystemKey             string
 	Wallet_Padding        string
 	Peer_TTL_Minute       int64
+	Seed_Url              string
 }
 
 func New() *Config {
@@ -37,6 +38,7 @@ func New() *Config {
 		SystemKey:             GetEnvAsStr("SYSTEM_KEY", ""),
 		Wallet_Padding:        GetEnvAsStr("WALLET_PADDING", ""),
 		Peer_TTL_Minute:       GetEnvAsInt("PEER_TTL_MINUTE", 6),
+		Seed_Url:              GetEnvAsStr("SEED_URL", "localhost:3001"),
 	}
 }
 

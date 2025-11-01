@@ -8,3 +8,4 @@ DROP INDEX IF EXISTS idx_pending_txid;
 DROP INDEX IF EXISTS idx_pending_tx_status_priority;
 DROP INDEX IF EXISTS idx_pending_tx_address;
 DROP TABLE IF EXISTS pending_transactions CASCADE;
+

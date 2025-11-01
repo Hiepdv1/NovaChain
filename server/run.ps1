@@ -27,6 +27,11 @@ function migrateDown {
     migrate -path $migratePath -database $env:POSTGRES_URL -verbose down $steps
 }
 
+function migrateDownAll {
+    Write-Host "⚠️ Rolling back ALL migrations..." -ForegroundColor Red
+    migrate -path $migratePath -database $env:POSTGRES_URL -verbose down -all
+}
+
 function migrateNew {
     param([string]$name)
     if (-not $name) {
@@ -62,13 +67,14 @@ function goTest {
 # -------------------------
 function dispatch($cmd, $steps, $name) {
     switch ($cmd) {
-        "run"   { goRun }
-        "build" { goBuild }
-        "test"  { goTest }
-        "mup"   { migrateUp }
-        "mdown" { migrateDown $steps }
-        "mnew"  { migrateNew $name }
-        "sqlc"  { sqlcGen }
+        "run"       { goRun }
+        "build"     { goBuild }
+        "test"      { goTest }
+        "mup"       { migrateUp }
+        "mdown"     { migrateDown $steps }
+        "mdownall"  { migrateDownAll }
+        "mnew"      { migrateNew $name }
+        "sqlc"      { sqlcGen }
         default {
             Write-Host "❌ Unknown command: $cmd" -ForegroundColor Red
             Write-Host "Available commands:" -ForegroundColor Yellow
@@ -77,6 +83,7 @@ function dispatch($cmd, $steps, $name) {
             Write-Host "  test      -> run tests"
             Write-Host "  mup       -> migrate up"
             Write-Host "  mdown     -> migrate down <steps> (default 1)"
+            Write-Host "  mdownall  -> rollback ALL migrations (drop all tables)"
             Write-Host "  mnew      -> create new migration <-name required>"
             Write-Host "  sqlc      -> sqlc generate"
         }

@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	blockchain "core-blockchain/core"
-	"core-blockchain/memopool"
 	"maps"
 	"slices"
 	"time"
@@ -16,31 +15,37 @@ func (net *Network) MinersEventLoop() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	time.Sleep(10 * time.Second)
+
 	go net.requestTransaction(ctx)
 	net.miningLoop(ctx)
 }
 
 func (net *Network) requestTransaction(ctx context.Context) {
-	poolCheckTicker := time.NewTicker(30 * time.Second)
-	defer poolCheckTicker.Stop()
-	for range poolCheckTicker.C {
+	log.Info("TxPool sync: starting periodic transaction request routine (interval = 10s)")
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
 		select {
 		case <-ctx.Done():
+			log.Info("TxPool sync: stopped periodic transaction request routine")
 			return
-		default:
+		case <-ticker.C:
+			peers := net.FullNodesChannel.ListPeers()
+			if len(peers) == 0 {
+				continue
+			}
+
 			net.Gossip.Broadcast(
-				net.FullNodesChannel.ListPeers(),
-				[]string{
-					net.Host.ID().String(),
-				},
+				peers,
+				[]string{net.Host.ID().String()},
 				func(p peer.ID) {
-					net.SendRequestTxFromPool(
-						p.String(),
-						TxFromPool{
-							SendFrom: net.Host.ID().String(),
-							Count:    1,
-						},
-					)
+					net.SendRequestTxFromPool(p.String(), TxFromPool{
+						SendFrom: net.Host.ID().String(),
+						Count:    1,
+					})
 				},
 			)
 		}
@@ -48,135 +53,109 @@ func (net *Network) requestTransaction(ctx context.Context) {
 }
 
 func (net *Network) miningLoop(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
+	net.IsMining = true
 	for {
 		select {
 		case <-ctx.Done():
+			log.Info("Mining loop stopped.")
+			net.IsMining = false
 			return
-		case <-ticker.C:
-			net.tryMine(ctx)
+		default:
+			if !net.syncCompleted {
+				time.Sleep(3 * time.Second)
+				continue
+			}
+
+			txs := MemoryPool.SelectHighFeeTx()
+			if len(txs) == 0 {
+				txs = map[string]blockchain.Transaction{}
+			}
+
+			miningCtx, cancel := context.WithCancel(ctx)
+			net.tryMine(miningCtx, cancel, txs)
+
+			time.Sleep(time.Second)
 		}
 	}
 }
 
-func (net *Network) tryMine(ctx context.Context) {
-
-	if len(MemoryPool.Pending) == 0 {
-		return
-	}
-
-	txs := MemoryPool.SelectHighFeeTx()
-
-	if len(MemoryPool.Queued) == 0 {
-		return
-	}
-
+func (net *Network) tryMine(ctx context.Context, cancel context.CancelFunc, txs map[string]blockchain.Transaction) {
 	if !net.syncCompleted {
 		return
 	}
 
 	log.Info("Starting mining new block...")
-	net.mineBlock(ctx, txs)
+	net.mineBlock(ctx, cancel, txs)
 }
 
-func (net *Network) mineBlock(ctx context.Context, txs map[string]blockchain.Transaction) {
-	ctxInternal, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func (net *Network) mineBlock(ctx context.Context, cancel context.CancelFunc, txs map[string]blockchain.Transaction) {
 	chain := net.Blockchain
 	lastBlock, err := chain.GetLastBlock()
 	if err != nil {
-		log.Errorf("Get last block with err: %v", err)
+		log.Errorf("Get last block error: %v", err)
 		return
 	}
 
-	log.Infof("Start mining at height %d with %d txs", lastBlock.Height, len(txs))
-
-	var txList []*blockchain.Transaction
+	log.Infof("Mining at height %d with %d txs", lastBlock.Height+1, len(txs))
+	txList := make([]*blockchain.Transaction, 0)
 	for _, tx := range txs {
 		txList = append(txList, &tx)
 	}
 
 	resultCh := make(chan *blockchain.Block, 1)
 
-	go net.listenCompetingBlocks(ctxInternal, lastBlock.Height, resultCh)
+	go net.listenCompetingBlocks(ctx, lastBlock.Height, cancel)
 
-	go func() {
-		net.IsMining = true
-		block, err := chain.MineBlock(
-			txList,
-			MinerAddress,
-			net.HandleReoganizeTx,
-			ctx,
-		)
-
-		if err != nil {
-			log.Errorf("MineBlock error: %v", err)
-			resultCh <- nil
-			return
-		}
-
-		resultCh <- block
-	}()
+	go net.startMiningWorker(ctx, resultCh, txList)
 
 	select {
 	case <-ctx.Done():
-		log.Info("Mining cancelled by context")
-		net.IsMining = false
-		return
+		log.Warn("Mining canceled.")
 	case mined := <-resultCh:
-		if mined == nil {
-			log.Info("Mining stopped or failed.")
-			for txID, tx := range MemoryPool.Queued {
-				if !MemoryPool.HasPending(txID) {
-					MemoryPool.Move(tx, memopool.MEMO_MOVE_FLAG_PENDING)
-				}
-			}
-			ctx.Done()
-			return
+		if mined != nil {
+			net.handleMinedBlock(mined)
 		}
-		net.handleMinedBlock(mined)
-		net.IsMining = false
-		ctxInternal.Done()
+		cancel()
 	}
 }
 
-func (net *Network) listenCompetingBlocks(ctx context.Context, currentHeight int64, stop chan<- *blockchain.Block) {
+func (net *Network) startMiningWorker(ctx context.Context, resultCh chan<- *blockchain.Block, txList []*blockchain.Transaction) {
+	chain := net.Blockchain
+
+	log.Infof("[Miner] start mining...")
+	block, err := chain.MineBlock(txList, MinerAddress, net.HandleReoganizeTx, ctx)
+	if err != nil {
+		log.Warnf("[Miner] MineBlock: %v", err)
+		resultCh <- nil
+		return
+	}
+
+	resultCh <- block
+	log.Infof("[Miner] found valid block at height %d!", block.Height)
+
+}
+
+func (net *Network) listenCompetingBlocks(ctx context.Context, currentHeight int64, cancel context.CancelFunc) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case block := <-net.competingBlockChan:
-			if block.Height > currentHeight {
-				log.Infof("Competing block detected (height %d), stop mining", block.Height)
-				stop <- nil
-				net.IsMining = false
-				return
-			}
-		default:
-			if !net.syncCompleted {
-				stop <- nil
+			if block.Height >= currentHeight {
+				log.Warnf("Competing block detected (height %d), stop mining", block.Height)
+				cancel()
 				return
 			}
 		}
-
 	}
 }
 
 func (net *Network) handleMinedBlock(block *blockchain.Block) {
-	utxo := blockchain.UTXOSet{Blockchain: net.Blockchain}
-	utxo.Compute()
-
 	log.Infof("New Block Mined: %x", block.Hash)
-
 	net.Blocks <- block
 
 	keys := slices.Collect(maps.Keys(MemoryPool.Queued))
-
 	for _, key := range keys {
 		MemoryPool.RemoveFromAll(key)
 	}
-
 }

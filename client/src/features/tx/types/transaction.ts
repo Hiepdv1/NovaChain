@@ -117,3 +117,14 @@ export interface TransactionFull {
   Fromhash: NullableString;
   Tohash: NullableString;
 }
+
+export interface TransactionItem {
+  ID: string;
+  TxID: string;
+  BID: string;
+  CreateAt: number;
+  Fromhash: NullableString;
+  Tohash: NullableString;
+  Fee: NullableString;
+  Amount: NullableString;
+}

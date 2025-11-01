@@ -19,7 +19,7 @@ var (
 
 const (
 	ChainPrefix   = "chain-"
-	MaxForkLength = 3
+	MaxForkLength = 6
 )
 
 func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction)) error {
@@ -98,7 +98,7 @@ func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction))
 	}
 
 	for _, oldBlock := range oldChain {
-		if oldBlock.Height <= commonAncestorHeight {
+		if oldBlock.Height < commonAncestorHeight {
 			continue
 		}
 		for _, tx := range oldBlock.Transactions {
@@ -114,7 +114,7 @@ func (bc *Blockchain) Reorganize(newBlock *Block, callback func([]*Transaction))
 	}
 
 	for _, nb := range newChain {
-		if nb.Height <= commonAncestorHeight {
+		if nb.Height < commonAncestorHeight {
 			continue
 		}
 		for _, tx := range nb.Transactions {
@@ -178,6 +178,8 @@ func (bc *Blockchain) AddBlock(block *Block, callback func([]*Transaction)) erro
 	mutex.Lock()
 	defer mutex.Unlock()
 
+	log.Infof("ADD BLOCK: processing block %x (height=%d, prev=%x)", block.Hash, block.Height, block.PrevHash)
+
 	if !bc.IsBlockValid(*block) {
 		return fmt.Errorf("ADD BLOCK: invalid block %x", block.Hash)
 	}
@@ -186,27 +188,33 @@ func (bc *Blockchain) AddBlock(block *Block, callback func([]*Transaction)) erro
 	if err != nil {
 		return fmt.Errorf("ADD BLOCK: failed to get current tip: %w", err)
 	}
+	log.Debugf("ADD BLOCK: current tip block is %x (height=%d)", currentTipBlock.Hash, currentTipBlock.Height)
 
 	prevBlock, err := bc.GetBlock(block.PrevHash)
 	if err != nil {
 		return fmt.Errorf("ADD BLOCK: failed to get previous block %x: %w", block.PrevHash, err)
 	}
+	log.Debugf("ADD BLOCK: previous block %x loaded successfully", block.PrevHash)
 
 	newChainWork := bc.CalcWork(block.NBits)
 	newChainWork = new(big.Int).Add(prevBlock.NChainWork, newChainWork)
 	block.NChainWork = newChainWork
 
-	log.Infof("ADD BLOCK: received block %x (height=%d). Current tip work=%s, new block chain work=%s",
+	log.Infof("ADD BLOCK: received block %x (height=%d). Current tip work=%s → new block chain work=%s",
 		block.Hash, block.Height, currentTipBlock.NChainWork.String(), newChainWork.String(),
 	)
 
 	if newChainWork.Cmp(currentTipBlock.NChainWork) > 0 {
-		log.Infof("ADD BLOCK: block %x extends a stronger chain → starting reorganization", block.Hash)
+		log.Infof("ADD BLOCK: block %x has higher chain work → triggering chain reorganization", block.Hash)
+
 		if err := bc.Reorganize(block, callback); err != nil {
 			return fmt.Errorf("ADD BLOCK: reorganization failed for block %x: %w", block.Hash, err)
 		}
+
+		log.Infof("ADD BLOCK: reorganization completed successfully for block %x", block.Hash)
 	} else {
-		log.Infof("ADD BLOCK: block %x stored as disconnected (weaker chain)", block.Hash)
+		log.Infof("ADD BLOCK: block %x has lower chain work → saving as disconnected block", block.Hash)
+
 		err := bc.Database.Update(func(txn *badger.Txn) error {
 			keyCheckpoint := fmt.Sprint(CheckpointPrefix, block.Height)
 			if err := txn.Set([]byte(keyCheckpoint), block.Hash); err != nil {
@@ -219,7 +227,20 @@ func (bc *Blockchain) AddBlock(block *Block, callback func([]*Transaction)) erro
 		if err != nil {
 			return fmt.Errorf("ADD BLOCK: failed to save disconnected block %x: %v", block.Hash, err)
 		}
+
+		log.Debugf("ADD BLOCK: disconnected block %x saved successfully", block.Hash)
 	}
 
+	log.Info("ADD BLOCK: updating UTXO set...")
+	utxoSet := UTXOSet{
+		Blockchain: bc,
+	}
+
+	err = utxoSet.Compute()
+	if err != nil {
+		return fmt.Errorf("ADD BLOCK: failed to compute UTXO set: %v", err)
+	}
+
+	log.Info("ADD BLOCK: block successfully added and UTXO set updated")
 	return nil
 }

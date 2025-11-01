@@ -31,6 +31,7 @@ type Env struct {
 	CheckSumLength                  int64
 	Version                         int64
 	Encode_data_secret_Key          []byte
+	Sync_block_batch_size           int64
 }
 
 var Cfg *Env
@@ -50,6 +51,7 @@ func InitEnv() {
 			CheckSumLength:                  GetEnvAsInt("CHECK_SUM_LENGTH", 4),
 			Version:                         GetEnvAsInt("VERSION", 0x00),
 			Encode_data_secret_Key:          GetEnvAsBytes("ENCODE_DATA_SECRET_KEY", []byte("")),
+			Sync_block_batch_size:           GetEnvAsInt("SYNC_BLOCK_BATCH_SIZE", 100),
 		}
 	})
 }

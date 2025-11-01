@@ -30,7 +30,6 @@ type DbTransactionRepository interface {
 	GetCountTransaction(ctx context.Context) (int64, error)
 	FindListTxInputByBlockHash(ctx context.Context, b_id string, tx *sql.Tx) ([]dbchain.TxInput, error)
 	FindListTxOutputByBlockHash(ctx context.Context, b_id string, tx *sql.Tx) ([]dbchain.TxOutput, error)
-	CountTransactions(ctx context.Context, tx *sql.Tx) (int64, error)
 	CountTodayTransaction(ctx context.Context, tx *sql.Tx) (int64, error)
 	GetListFullTransaction(ctx context.Context, arg dbchain.GetListFullTransactionParams, tx *sql.Tx) ([]dbchain.GetListFullTransactionRow, error)
 	SearchFuzzyTransactionsByBlock(ctx context.Context, arg dbchain.SearchFuzzyTransactionsByBlockParams) ([]dbchain.Transaction, error)
@@ -46,6 +45,8 @@ type DbTransactionRepository interface {
 	ExistingPendingTransaction(ctx context.Context, arg dbPendingTx.PendingTxExistsParams, tx *sql.Tx) (bool, error)
 	FindTxPendingByTxID(ctx context.Context, txID string, tx *sql.Tx) (dbPendingTx.PendingTransaction, error)
 	FindTxPendingByAddrAndStatus(ctx context.Context, args dbPendingTx.PendingTxsByAddressAndStatusParams, tx *sql.Tx) ([]dbPendingTx.PendingTxsByAddressAndStatusRow, error)
+	GetPendingTransactions(ctx context.Context, arg dbPendingTx.GetListPendingTxsParams) ([]dbPendingTx.GetListPendingTxsRow, error)
+	GetCountPendingTransaction(ctx context.Context) (int64, error)
 
 	// ---------------- Pending Tx Data ----------------
 	InsertPendingTxData(ctx context.Context, args dbPendingTx.InsertPendingTxDataParams, tx *sql.Tx) (dbPendingTx.PendingTxDatum, error)

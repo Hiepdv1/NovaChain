@@ -3,6 +3,7 @@ package jsonrpc
 import (
 	"core-blockchain/cmd/utils"
 	"core-blockchain/common/err"
+	"core-blockchain/json-rpc/types"
 	"encoding/json"
 
 	log "github.com/sirupsen/logrus"
@@ -27,7 +28,7 @@ func (api *API) HandleCreateWallet(params json.RawMessage) (any, *err.RPCError) 
 }
 
 func (api *API) HandleGetBalance(params json.RawMessage) (any, *err.RPCError) {
-	var args []WalletAPIArgs
+	var args []types.WalletAPIArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
 		return nil, err.ErrInvalidArgument("Invalid parameters")
 	}
@@ -39,7 +40,7 @@ func (api *API) HandleGetBalance(params json.RawMessage) (any, *err.RPCError) {
 
 func (api *API) HandleGetBlockchain(params json.RawMessage) (any, *err.RPCError) {
 
-	var args []GetBlockchainAPIArgs
+	var args []types.GetBlockchainAPIArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
 		log.Error(e)
 		return nil, err.ErrInvalidArgument("Invalid parameters")
@@ -56,7 +57,7 @@ func (api *API) HandleGetBlockchain(params json.RawMessage) (any, *err.RPCError)
 
 func (api *API) HandleGetBlockByHeight(params json.RawMessage) (any, *err.RPCError) {
 
-	var args []GetAPIBlockArgs
+	var args []types.GetAPIBlockArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
 		log.Error(e)
 		return nil, err.ErrInvalidArgument("Invalid parameters")
@@ -73,7 +74,7 @@ func (api *API) HandleGetBlockByHeight(params json.RawMessage) (any, *err.RPCErr
 
 func (api *API) HandleGetBlocksByHeightRange(params json.RawMessage) (any, *err.RPCError) {
 
-	var args []GetAPIBlockByHeightRangeArgs
+	var args []types.GetAPIBlockByHeightRangeArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
 		log.Error(e)
 		return nil, err.ErrInvalidArgument("Invalid parameters")
@@ -89,9 +90,30 @@ func (api *API) HandleGetBlocksByHeightRange(params json.RawMessage) (any, *err.
 	return blocks, nil
 }
 
+func (api *API) HandleGetCommonBlock(params json.RawMessage) (any, *err.RPCError) {
+	var args []types.CommonBlockArgs
+
+	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
+		log.Error(e)
+		return nil, err.ErrInvalidArgument("Invalid parameters")
+	}
+
+	block, e := api.cmd.GetCommonBlock(args[0].Locator)
+	if e != nil {
+		log.Error(e)
+		return nil, err.ErrInternal("Internal error")
+	}
+
+	if block == nil {
+		return nil, err.ErrNotFound("Not common block.")
+	}
+
+	return block, nil
+}
+
 func (api *API) HandleSendTx(params json.RawMessage) (any, *err.RPCError) {
 
-	var args []SendTxAPIArgs
+	var args []types.SendTxAPIArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
 		log.Error(e)
 		return nil, err.ErrInvalidArgument("Invalid parameters")
@@ -102,7 +124,7 @@ func (api *API) HandleSendTx(params json.RawMessage) (any, *err.RPCError) {
 
 func (api *API) GetMiningTxs(params json.RawMessage) (any, *err.RPCError) {
 
-	var args []GetMiningTxsAPIArgs
+	var args []types.GetMiningTxsAPIArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
 		log.Error(e)
 		return nil, err.ErrInvalidArgument("Invalid parameters")
@@ -113,7 +135,7 @@ func (api *API) GetMiningTxs(params json.RawMessage) (any, *err.RPCError) {
 
 func (api *API) GetBlockByHash(params json.RawMessage) (any, *err.RPCError) {
 
-	var args []GETAPIBlockByHash
+	var args []types.GETBlockByHashArgs
 	if e := json.Unmarshal(params, &args); e != nil || len(args) != 1 {
 		log.Error(e)
 		return nil, err.ErrInvalidArgument("Invalid parameters")

@@ -43,4 +43,8 @@ func (r *ChainRoutes) RegisterPublic(router fiber.Router) {
 		middlewares.ValidateQuery[GetSearchResultDto](false),
 		r.handler.GetSearchResult,
 	)
+
+	r.chainGroup.Get("/network",
+		r.handler.GetNetwork,
+	)
 }

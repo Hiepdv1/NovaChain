@@ -64,7 +64,7 @@ FROM (
     WHERE i.out_index = -1 AND i.b_id = b.b_id
     LIMIT 1
   ) coinbase ON true
-  WHERE similarity(b.b_id::text, sqlc.arg('searchQuery')) > 0
+  WHERE similarity(b.b_id::text, sqlc.arg('searchQuery')) > 0.1
 
   UNION ALL
 
@@ -81,7 +81,7 @@ FROM (
     similarity(t.tx_id::text, sqlc.arg('searchQuery')) AS score  
   FROM transactions t
   JOIN tx_inputs i on i.tx_id = t.tx_id
-  WHERE similarity(t.tx_id::text, sqlc.arg('searchQuery')) > 0 AND i.out_index > -1
+  WHERE similarity(t.tx_id::text, sqlc.arg('searchQuery')) > 0.1 AND i.out_index > -1
 ) AS unified
 ORDER BY score DESC
 OFFSET $1
@@ -131,20 +131,25 @@ FROM blocks b
 WHERE b.b_id = $1
 LIMIT 1;
 
+-- name: GetRecentBlocksForNetworkInfo :many
+SELECT height, nbits, timestamp
+FROM blocks
+ORDER BY height DESC
+LIMIT $1;
 
 -- name: CountFuzzy :one
 SELECT COUNT(*) AS total_count
 FROM (
   SELECT 1
   FROM blocks b
-  WHERE similarity(b.b_id::TEXT, sqlc.arg('searchQuery')) > 0
+  WHERE similarity(b.b_id::TEXT, sqlc.arg('searchQuery')) > 0.1
   
   UNION ALL
   
   SELECT 1
   FROM transactions t 
   JOIN tx_inputs i on i.tx_id = t.tx_id
-  WHERE similarity(t.tx_id::text, sqlc.arg('searchQuery')) > 0 AND i.out_index > -1
+  WHERE similarity(t.tx_id::text, sqlc.arg('searchQuery')) > 0.1 AND i.out_index > -1
 ) AS unified;
 
 -- name: CountFuzzyByType :many
@@ -177,7 +182,20 @@ select * from blocks where b_id = $1 limit 1;
 select * from blocks order by height desc limit 1;
 
 -- name: GetListBlocks :many
-select * from blocks order by height desc offset $1 limit $2;
+SELECT
+  b.*,
+  miner.*
+FROM blocks b
+LEFT JOIN LATERAL (
+  SELECT o.pub_key_hash, o.value
+  FROM tx_inputs i
+  JOIN tx_outputs o ON i.tx_id = o.tx_id AND i.b_id = b.b_id
+  WHERE i.out_index = -1
+  LIMIT 1
+) AS miner ON TRUE
+ORDER BY b.height DESC
+OFFSET $1 
+LIMIT $2;
 
 -- name: IsExistingBlock :one
 select exists (
@@ -200,14 +218,14 @@ WHERE timestamp >= EXTRACT(EPOCH FROM NOW())::bigint - (sqlc.arg(hours)::bigint 
 delete from blocks
 where b_id = $1;
 
+-- name: DeleteBlockByHeight :exec
+DELETE FROM blocks
+WHERE height = $1;
 
 
 -- name: CreateTransaction :one
 insert into transactions (tx_id, b_id, fromHash, toHash, amount, fee, create_at)
 values ($1, $2, $3, $4, $5, $6, $7) returning *;
-
--- name: GetCountTransaction :one
-SELECT COUNT(*) FROM transactions;
 
 -- name: SearchFuzzyTransactionsByBlock :many
 SELECT 
@@ -248,8 +266,9 @@ select * from transactions
 WHERE fromhash != '' AND tohash != ''
 order by create_at desc offset $1 limit $2;
 
--- name: CountTransactions :one
-select COUNT(*) from transactions;
+-- name: GetCountTransaction :one
+SELECT COUNT(*) FROM transactions
+WHERE fromhash != '' AND tohash != '';
 
 -- name: CountTodayTransactions :one
 select COUNT(*) from transactions

@@ -58,10 +58,10 @@ const NavBar = () => {
   };
 
   return (
-    <div className="overflow-x-auto scrollbar-hide mb-8 select-none">
+    <div className="mb-8 select-none">
       <nav
         aria-label="Main navigation"
-        className="relative flex gap-x-2 bg-gradient-to-r from-white/60 to-white/40 dark:from-gray-800/50 dark:to-gray-700/40 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-2 shadow-sm"
+        className="overflow-x-auto scrollbar-hide relative flex gap-x-2 bg-gradient-to-r from-white/60 to-white/40 dark:from-gray-800/50 dark:to-gray-700/40 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-2 shadow-sm"
       >
         {NavList.map((navItem) => {
           const isActive = isMatch(pathname, navItem.active);

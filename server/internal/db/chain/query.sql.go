@@ -36,14 +36,14 @@ SELECT COUNT(*) AS total_count
 FROM (
   SELECT 1
   FROM blocks b
-  WHERE similarity(b.b_id::TEXT, $1) > 0
+  WHERE similarity(b.b_id::TEXT, $1) > 0.1
   
   UNION ALL
   
   SELECT 1
   FROM transactions t 
   JOIN tx_inputs i on i.tx_id = t.tx_id
-  WHERE similarity(t.tx_id::text, $1) > 0 AND i.out_index > -1
+  WHERE similarity(t.tx_id::text, $1) > 0.1 AND i.out_index > -1
 ) AS unified
 `
 
@@ -139,17 +139,6 @@ select COUNT(*) from transactions where b_id = $1
 
 func (q *Queries) CountTransactionByBID(ctx context.Context, bID string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countTransactionByBID, bID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countTransactions = `-- name: CountTransactions :one
-select COUNT(*) from transactions
-`
-
-func (q *Queries) CountTransactions(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTransactions)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -324,6 +313,16 @@ where b_id = $1
 
 func (q *Queries) DeleteBlockByBID(ctx context.Context, bID string) error {
 	_, err := q.db.ExecContext(ctx, deleteBlockByBID, bID)
+	return err
+}
+
+const deleteBlockByHeight = `-- name: DeleteBlockByHeight :exec
+DELETE FROM blocks
+WHERE height = $1
+`
+
+func (q *Queries) DeleteBlockByHeight(ctx context.Context, height int64) error {
+	_, err := q.db.ExecContext(ctx, deleteBlockByHeight, height)
 	return err
 }
 
@@ -578,6 +577,7 @@ func (q *Queries) GetCountTodayWorkerMiners(ctx context.Context) (int64, error) 
 
 const getCountTransaction = `-- name: GetCountTransaction :one
 SELECT COUNT(*) FROM transactions
+WHERE fromhash != '' AND tohash != ''
 `
 
 func (q *Queries) GetCountTransaction(ctx context.Context) (int64, error) {
@@ -687,7 +687,20 @@ func (q *Queries) GetListBlockByHours(ctx context.Context, hours int64) ([]Block
 }
 
 const getListBlocks = `-- name: GetListBlocks :many
-select id, b_id, prev_hash, nonce, height, merkle_root, nbits, tx_count, nchain_work, size, timestamp from blocks order by height desc offset $1 limit $2
+SELECT
+  b.id, b.b_id, b.prev_hash, b.nonce, b.height, b.merkle_root, b.nbits, b.tx_count, b.nchain_work, b.size, b.timestamp,
+  miner.pub_key_hash, miner.value
+FROM blocks b
+LEFT JOIN LATERAL (
+  SELECT o.pub_key_hash, o.value
+  FROM tx_inputs i
+  JOIN tx_outputs o ON i.tx_id = o.tx_id AND i.b_id = b.b_id
+  WHERE i.out_index = -1
+  LIMIT 1
+) AS miner ON TRUE
+ORDER BY b.height DESC
+OFFSET $1 
+LIMIT $2
 `
 
 type GetListBlocksParams struct {
@@ -695,15 +708,31 @@ type GetListBlocksParams struct {
 	Limit  int32
 }
 
-func (q *Queries) GetListBlocks(ctx context.Context, arg GetListBlocksParams) ([]Block, error) {
+type GetListBlocksRow struct {
+	ID         uuid.UUID
+	BID        string
+	PrevHash   sql.NullString
+	Nonce      int64
+	Height     int64
+	MerkleRoot string
+	Nbits      int64
+	TxCount    int64
+	NchainWork string
+	Size       float64
+	Timestamp  int64
+	PubKeyHash string
+	Value      string
+}
+
+func (q *Queries) GetListBlocks(ctx context.Context, arg GetListBlocksParams) ([]GetListBlocksRow, error) {
 	rows, err := q.db.QueryContext(ctx, getListBlocks, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Block
+	var items []GetListBlocksRow
 	for rows.Next() {
-		var i Block
+		var i GetListBlocksRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.BID,
@@ -716,6 +745,8 @@ func (q *Queries) GetListBlocks(ctx context.Context, arg GetListBlocksParams) ([
 			&i.NchainWork,
 			&i.Size,
 			&i.Timestamp,
+			&i.PubKeyHash,
+			&i.Value,
 		); err != nil {
 			return nil, err
 		}
@@ -1000,6 +1031,42 @@ func (q *Queries) GetListTxOutputByTxId(ctx context.Context, txID string) ([]TxO
 	return items, nil
 }
 
+const getRecentBlocksForNetworkInfo = `-- name: GetRecentBlocksForNetworkInfo :many
+SELECT height, nbits, timestamp
+FROM blocks
+ORDER BY height DESC
+LIMIT $1
+`
+
+type GetRecentBlocksForNetworkInfoRow struct {
+	Height    int64
+	Nbits     int64
+	Timestamp int64
+}
+
+func (q *Queries) GetRecentBlocksForNetworkInfo(ctx context.Context, limit int32) ([]GetRecentBlocksForNetworkInfoRow, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentBlocksForNetworkInfo, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentBlocksForNetworkInfoRow
+	for rows.Next() {
+		var i GetRecentBlocksForNetworkInfoRow
+		if err := rows.Scan(&i.Height, &i.Nbits, &i.Timestamp); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTransactionByTxID = `-- name: GetTransactionByTxID :one
 select id, tx_id, b_id, create_at, amount, fee, fromhash, tohash from transactions where tx_id = $1 limit 1
 `
@@ -1179,7 +1246,7 @@ FROM (
     WHERE i.out_index = -1 AND i.b_id = b.b_id
     LIMIT 1
   ) coinbase ON true
-  WHERE similarity(b.b_id::text, $3) > 0
+  WHERE similarity(b.b_id::text, $3) > 0.1
 
   UNION ALL
 
@@ -1196,7 +1263,7 @@ FROM (
     similarity(t.tx_id::text, $3) AS score  
   FROM transactions t
   JOIN tx_inputs i on i.tx_id = t.tx_id
-  WHERE similarity(t.tx_id::text, $3) > 0 AND i.out_index > -1
+  WHERE similarity(t.tx_id::text, $3) > 0.1 AND i.out_index > -1
 ) AS unified
 ORDER BY score DESC
 OFFSET $1

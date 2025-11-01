@@ -38,7 +38,11 @@ func NewTransaction(w *wallet.Wallet, to string, amount, fee float64, utxo *UTXO
 	if err != nil {
 		return nil, err
 	}
-	if acc < amount+fee {
+
+	amountCoin := NewCoinAmountFromFloat(amount)
+	feeCoin := NewCoinAmountFromFloat(fee)
+
+	if acc < amountCoin.Add(feeCoin).ToFloat() {
 		err := errors.New("you dont have enough amount")
 		return nil, err
 	}
@@ -60,8 +64,12 @@ func NewTransaction(w *wallet.Wallet, to string, amount, fee float64, utxo *UTXO
 
 	outputs = append(outputs, *NewTxOutput(amount, to))
 
-	if acc >= amount+fee {
-		outputs = append(outputs, *NewTxOutput(acc-amount-fee, from))
+	if acc >= amountCoin.Add(feeCoin).ToFloat() {
+		rest := NewCoinAmountFromFloat(acc)
+		rest = rest.Sub(amountCoin)
+		rest = rest.Sub(feeCoin)
+
+		outputs = append(outputs, *NewTxOutput(rest.ToFloat(), from))
 	}
 
 	tx := Transaction{nil, inputs, outputs}
@@ -294,7 +302,7 @@ func InitGenesisTx(height int64) (*Transaction, error) {
 		Signature: []byte{},
 		PubKey:    pubkey,
 	}
-	txOut := NewTxOutput(111_111_111.965185, "1LacjauKAjDJA34hjS9xJ2uEez7pQYqh5N")
+	txOut := NewTxOutput(111_111_111.11111111, "1LacjauKAjDJA34hjS9xJ2uEez7pQYqh5N")
 
 	tx := Transaction{
 		ID:      nil,

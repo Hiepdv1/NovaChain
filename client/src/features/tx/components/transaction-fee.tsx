@@ -23,7 +23,7 @@ export const FeeList: FeeOption[] = [
     fee: 0.1,
     value: 'slow',
     color: 'bg-yellow-500',
-    priority: 0,
+    priority: 1,
     checked: false,
   },
   {
@@ -33,7 +33,7 @@ export const FeeList: FeeOption[] = [
     fee: 0.5,
     value: 'standard',
     color: 'bg-blue-500',
-    priority: 1,
+    priority: 2,
     checked: true,
   },
   {
@@ -43,7 +43,7 @@ export const FeeList: FeeOption[] = [
     fee: 0.9,
     value: 'fast',
     color: 'bg-green-500',
-    priority: 2,
+    priority: 3,
     checked: false,
   },
 ];

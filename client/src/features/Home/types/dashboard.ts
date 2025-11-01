@@ -1,4 +1,5 @@
-import { NullableString } from '@/shared/types/flag';
+import { BlockItem } from '@/features/block/types/block';
+import { TransactionItem } from '@/features/tx/types/transaction';
 
 export interface NetworkOverview {
   Chain: {
@@ -7,7 +8,8 @@ export interface NetworkOverview {
   };
   Hashrate: {
     Value: string;
-    Per24H: string;
+    ChangeRate: string;
+    Trend: 'increase' | 'decrease' | 'stable';
   };
   Transaction: {
     Total: number;
@@ -21,31 +23,6 @@ export interface NetworkOverview {
     Count: number;
     Worker: number;
   };
-}
-
-export interface BlockItem {
-  ID: string;
-  BID: string;
-  PrevHash: NullableString;
-  Nonce: number;
-  Height: number;
-  MerkleRoot: string;
-  Nbits: number;
-  TxCount: number;
-  NchainWork: string;
-  Size: number;
-  Timestamp: number;
-}
-
-export interface TransactionItem {
-  ID: string;
-  TxID: string;
-  BID: string;
-  CreateAt: number;
-  Fromhash: NullableString;
-  Tohash: NullableString;
-  Fee: NullableString;
-  Amount: NullableString;
 }
 
 export interface RecentActivityResponse {

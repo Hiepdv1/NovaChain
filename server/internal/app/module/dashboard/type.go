@@ -8,8 +8,9 @@ type NetworkOverview struct {
 		PerHours   int64
 	}
 	Hashrate struct {
-		Value  string
-		Per24H string
+		Value      string
+		Trend      string
+		ChangeRate string
 	}
 	Transaction struct {
 		Total      int64
@@ -26,6 +27,6 @@ type NetworkOverview struct {
 }
 
 type RecentActivity struct {
-	Blocks []dbchain.Block
+	Blocks []dbchain.GetListBlocksRow
 	Txs    []dbchain.Transaction
 }

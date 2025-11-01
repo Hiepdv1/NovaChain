@@ -25,13 +25,13 @@ type Block struct {
 	NChainWork *big.Int `json:"NChainWork"`
 }
 
-func CreateBlock(txs []*Transaction, prevHash []byte, height int64, NBits uint32, ctx context.Context) (*Block, error) {
+func CreateBlock(txs []*Transaction, prevHash []byte, newBlockHeight int64, NBits uint32, ctx context.Context) (*Block, error) {
 	block := &Block{
 		Timestamp:    time.Now().Unix(),
 		PrevHash:     prevHash,
 		Transactions: txs,
 		NBits:        NBits,
-		Height:       height,
+		Height:       newBlockHeight,
 		TxCount:      int64(len(txs)),
 	}
 
@@ -46,7 +46,7 @@ func CreateBlock(txs []*Transaction, prevHash []byte, height int64, NBits uint32
 	log.Infof("⛏️  Mined block in %s | Nonce: %d | Hash: %x", duration, nonce, hash)
 
 	block.Hash = hash
-	block.Nonce = *nonce
+	block.Nonce = nonce
 
 	merkleRoot, err := block.HashTransactions()
 	if err != nil {
@@ -70,7 +70,7 @@ func Genesis(MinerTx *Transaction) (*Block, error) {
 		Timestamp:    1758441999,
 		PrevHash:     nil,
 		Transactions: []*Transaction{MinerTx},
-		NBits:        0x207fffff,
+		NBits:        0x1f00ffff,
 		Height:       1,
 		TxCount:      1,
 	}
@@ -138,7 +138,7 @@ func (b *Block) IsBlockValid(oldBlock Block) bool {
 
 	merkleRoot, err := b.HashTransactions()
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Failed to get merkle root: %v", err)
 		return false
 	}
 

@@ -19,9 +19,9 @@ const (
 )
 
 const (
-	PriorityLow    = 0
-	PriorityNormal = 1
-	PriorityHigh   = 2
+	PriorityLow    = 1
+	PriorityNormal = 2
+	PriorityHigh   = 3
 )
 
 var Priorities = map[uint]PriorityInfo{

@@ -1,3 +1,3 @@
-import BlockDetailPage from '@/features/blockDetail/page/page';
+import BlockDetailPage from '@/features/block/pages/blockDetail';
 
 export default BlockDetailPage;

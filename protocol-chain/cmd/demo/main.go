@@ -1,8 +1,9 @@
 package main
 
 import (
-	"core-blockchain/cmd/utils"
+	utilCmd "core-blockchain/cmd/utils"
 	"core-blockchain/common/env"
+	utilLog "core-blockchain/common/utils"
 	blockchain "core-blockchain/core"
 	jsonrpc "core-blockchain/json-rpc"
 	"core-blockchain/p2p"
@@ -24,8 +25,9 @@ func main() {
 	var rpcAddress string
 	var rpcMode string
 	var rpc bool
+	var isSeedPeer bool
 
-	cli := utils.CommandLine{
+	cli := utilCmd.CommandLine{
 		Blockchain: &blockchain.Blockchain{
 			Database:   nil,
 			InstanceId: InstanceId,
@@ -233,20 +235,25 @@ Example:
 `,
 		Args: cobra.MinimumNArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
+			logPath := fmt.Sprintf("/logs/console_%s.log", InstanceId)
+			_ = utilLog.ClearLogFile(logPath)
+
 			cli, err := cli.UpdateInstance(InstanceId, false)
+
 			if err != nil {
 				log.Error(err)
 			}
+
 			if miner && len(minerAddress) == 0 {
 				log.Fatal("Miner address is required when starting a miner node")
 			}
 
-			log.Infof("🔧 Starting node with instanceId: %s on port: %s\n", InstanceId, listenPort)
+			log.Infof("🔧 Starting node with instanceId: %s on port: %s", InstanceId, listenPort)
 
-			cli.StartNode(listenPort, minerAddress, miner, fullNode, func(net *p2p.Network) {
+			cli.StartNode(listenPort, minerAddress, miner, fullNode, isSeedPeer, func(net *p2p.Network) {
 				log.Info("✅ Node started successfully and joined the network")
 				if miner {
-					log.Info("⛏️ Miner mode")
+					log.Info("Miner mode")
 				}
 				if rpc {
 					cli.P2P = net
@@ -260,7 +267,7 @@ Example:
 	nodeCmd.Flags().StringVar(&minerAddress, "Address", conf.MinerAddress, "Set miner address")
 	nodeCmd.Flags().BoolVar(&miner, "Miner", conf.Miner, "Set as true if you are joining the network as a miner")
 	nodeCmd.Flags().BoolVar(&fullNode, "Fullnode", conf.FullNode, "Set as true if you are joining the network as a miner")
-
+	nodeCmd.Flags().BoolVar(&isSeedPeer, "SeedPeer", false, "Enable the Seed Peer")
 	/*
 	* SEND COMMAND
 	 */

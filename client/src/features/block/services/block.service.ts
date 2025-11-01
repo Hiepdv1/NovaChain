@@ -1,14 +1,37 @@
-import { handleApiError } from '@/lib/axios/handleErrorApi';
-import { http } from '@/lib/axios/http';
 import {
   BlockDetail,
+  BlockItem,
   GetBlockDetailQuery,
   GetTransactionByBlockSearchQuery,
-} from '../types/block';
+} from '@/features/block/types/block';
+import { handleApiError } from '@/lib/axios/handleErrorApi';
+import { http } from '@/lib/axios/http';
 import { BaseResponse, BaseResponseList } from '@/shared/types/api';
+import { NetworkInfo } from '../types/block';
+import { PaginationParam } from '@/shared/types/query';
 import { TransactionFull } from '@/features/tx/types/transaction';
 
-class BlockService {
+class ChainService {
+  public async GetNetworkInfo() {
+    try {
+      const res = await http.get<BaseResponse<NetworkInfo>>('/chain/network');
+      return res.data;
+    } catch (err) {
+      throw handleApiError(err);
+    }
+  }
+
+  public async GetListBlocks(params: PaginationParam) {
+    try {
+      const res = await http.get<BaseResponseList<BlockItem[]>>(
+        `/chain/blocks?page=${params.page}&limit=${params.limit}`,
+      );
+      return res.data;
+    } catch (err) {
+      throw handleApiError(err);
+    }
+  }
+
   public async GetBlockDetail(query: GetBlockDetailQuery) {
     try {
       const res = await http.get<BaseResponse<BlockDetail>>(
@@ -35,6 +58,6 @@ class BlockService {
   }
 }
 
-const blockService = new BlockService();
+const chainService = new ChainService();
 
-export default blockService;
+export default chainService;

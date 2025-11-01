@@ -17,6 +17,36 @@ func NewRPCChainRepository() RPCChainRepository {
 	}
 }
 
+func (r *rpcChainRepository) GetCommonBlock(locator [][]byte) (*Block, error) {
+	params := []any{
+		map[string]any{
+			"locator": locator,
+		},
+	}
+
+	data, err := client.CallRPC(
+		r.env.Fullnode_RPC_URL,
+		"API.GetCommonBlock",
+		params,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var rpcResp client.RPCResponse
+	if err := json.Unmarshal(data, &rpcResp); err != nil {
+		return nil, err
+	}
+
+	var block *Block
+	if err := json.Unmarshal(rpcResp.Result, &block); err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
 func (r *rpcChainRepository) GetBlocks(startHash string, limit int) ([]*Block, error) {
 
 	params := []any{

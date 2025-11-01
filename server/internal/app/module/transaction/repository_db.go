@@ -137,15 +137,6 @@ func (r *dbTransactionRepository) FindListTxOutputByBlockHash(ctx context.Contex
 	return q.FindListTxOutputByBlockID(ctx, b_id)
 }
 
-func (r *dbTransactionRepository) CountTransactions(ctx context.Context, tx *sql.Tx) (int64, error) {
-	q := r.queries
-	if tx != nil {
-		q = r.queries.WithTx(tx)
-	}
-
-	return q.CountTransactions(ctx)
-}
-
 func (r *dbTransactionRepository) CountTodayTransaction(ctx context.Context, tx *sql.Tx) (int64, error) {
 	q := r.queries
 	if tx != nil {
@@ -237,6 +228,15 @@ func (r *dbTransactionRepository) CountTodayPendingTxs(ctx context.Context, tx *
 	}
 
 	return q.CountTodayPendingTxs(ctx)
+}
+
+func (r *dbTransactionRepository) GetPendingTransactions(ctx context.Context, arg dbPendingTx.GetListPendingTxsParams) ([]dbPendingTx.GetListPendingTxsRow, error) {
+
+	return r.pendingQueries.GetListPendingTxs(ctx, arg)
+}
+
+func (r *dbTransactionRepository) GetCountPendingTransaction(ctx context.Context) (int64, error) {
+	return r.pendingQueries.GetCountPendingTxs(ctx)
 }
 
 // ---------------- Pending Tx Data ----------------

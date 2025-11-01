@@ -31,3 +31,29 @@ export interface GetTransactionByBlockSearchQuery extends PaginationParam {
   b_hash: string;
   q: string;
 }
+
+export interface NetworkInfo {
+  LastBlock: number;
+  Hashrate: string;
+  AvgBlockTime: number;
+  AvgDifficulty: number;
+  SyncStatus: string;
+  NetworkHealth: string;
+  TxPending: number;
+}
+
+export interface BlockItem {
+  ID: string;
+  BID: string;
+  PrevHash: NullableString;
+  Nonce: number;
+  Height: number;
+  MerkleRoot: string;
+  Nbits: number;
+  TxCount: number;
+  NchainWork: string;
+  Size: number;
+  Timestamp: number;
+  PubKeyHash: string;
+  Value: string;
+}

@@ -1,5 +1,5 @@
 import { Check, Copy, ExternalLink, Hash, Search, X, Zap } from 'lucide-react';
-import { BlockDetail } from '../types/block';
+import { BlockDetail } from '../../types/block';
 import {
   ChangeEvent,
   Fragment,
@@ -8,12 +8,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useSearchTransactionsByBlockQuery } from '../hook/useBlockQuery';
+import { useSearchTransactionsByBlockQuery } from '../../hooks/useBlockQuery';
 import { CACHE_TIME } from '@/shared/constants/ttl';
 import { FormatTimestamp, TruncateHash } from '@/shared/utils/format';
 import ErrorState from '@/components/errorState';
-import TransactionListSkeleton from './tx-list-Loading';
 import TransactionPagination from './tx-pagination';
+import TransactionListSkeleton from './tx-list-Loading';
 
 interface TransactionListProps {
   blockData: BlockDetail;
@@ -37,7 +37,7 @@ const TransactionList = ({ blockData }: TransactionListProps) => {
         b_hash: blockData.BID,
         q: searchQuery.value,
         page,
-        limit: 10,
+        limit: blockData.Transactions.Meta.limit,
       },
       {
         enabled:

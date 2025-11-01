@@ -117,6 +117,7 @@ func (channel *Channel) readLoop() {
 
 	for {
 		content, err := channel.sub.Next(channel.ctx)
+
 		if err != nil {
 			log.Errorf("Receiver Message with error: %v", err)
 			close(channel.Content)

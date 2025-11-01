@@ -7,7 +7,7 @@ import (
 
 func Run() {
 	sendTx := NewJobSendTx(
-		10*time.Second,
+		time.Second,
 		transaction.NewDbTransactionRepository(),
 		transaction.NewRPCTransactionRepo(),
 	)

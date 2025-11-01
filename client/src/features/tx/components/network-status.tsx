@@ -1,4 +1,11 @@
-const NetworkStatus = () => {
+import { NetworkInfo } from '@/features/block/types/block';
+import { FormatSeconds } from '@/shared/utils/format';
+
+interface NetworkStatusProps {
+  network: NetworkInfo;
+}
+
+const NetworkStatus = ({ network }: NetworkStatusProps) => {
   return (
     <div className="glass-card dark:bg-primary-dark dark:border-secondary-dark rounded-2xl p-6 shadow-lg shadow-black/5 dark:shadow-black/20">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center space-x-2">
@@ -21,7 +28,7 @@ const NetworkStatus = () => {
             </span>
           </div>
           <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-            Excellent
+            {network.NetworkHealth}
           </span>
         </div>
 
@@ -31,7 +38,7 @@ const NetworkStatus = () => {
               Block Height
             </div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">
-              #2,847,392
+              #{network.LastBlock}
             </div>
           </div>
           <div className="text-center p-3 bg-white/30 dark:bg-white/5 rounded-xl">
@@ -39,7 +46,7 @@ const NetworkStatus = () => {
               Avg Block Time
             </div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">
-              12.3s
+              {FormatSeconds(network.AvgBlockTime)}
             </div>
           </div>
           <div className="text-center p-3 bg-white/30 dark:bg-white/5 rounded-xl">
@@ -47,7 +54,7 @@ const NetworkStatus = () => {
               Pending Txs
             </div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">
-              1,847
+              {network.TxPending}
             </div>
           </div>
           <div className="text-center p-3 bg-white/30 dark:bg-white/5 rounded-xl">
@@ -55,7 +62,7 @@ const NetworkStatus = () => {
               Network Load
             </div>
             <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-              Normal
+              {network.NetworkHealth}
             </div>
           </div>
         </div>

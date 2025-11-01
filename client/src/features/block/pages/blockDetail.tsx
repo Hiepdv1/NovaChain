@@ -1,10 +1,10 @@
 'use client';
 
 import { useParams, useSearchParams } from 'next/navigation';
-import { useBlockDetailQuery } from '../hook/useBlockQuery';
+import { useBlockDetailQuery } from '../hooks/useBlockQuery';
 import { FormatSize, FormatTimestamp, IsNumber } from '@/shared/utils/format';
 import NotFoundState from '@/components/notfound';
-import BlockDetailSkeletonLoader from '../components/Block-detail-loading';
+import BlockDetailSkeletonLoader from '../components/blockDetail/Block-detail-loading';
 import {
   Activity,
   Check,
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import ErrorState from '@/components/errorState';
-import TransactionList from '../components/Transaction-list';
+import TransactionList from '../components/blockDetail/Transaction-list';
 import { useHistoryContext } from '@/components/providers/History-provider';
 
 const BlockDetailPage = () => {
@@ -33,13 +33,13 @@ const BlockDetailPage = () => {
     currentPage = Number(Number(queryPage).toFixed());
   }
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
-  const { history, back } = useHistoryContext();
+  const { history, back, current } = useHistoryContext();
 
   const { isError, isLoading, isFetched, data, error, refetch } =
     useBlockDetailQuery(
       {
         b_hash: b_hash as string,
-        limit: 2,
+        limit: 10,
         page: currentPage,
       },
       {
@@ -84,13 +84,13 @@ const BlockDetailPage = () => {
     <div>
       {history.length > 0 && (
         <div className="sticky top-0 z-10 backdrop-blur-md border-b bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 transition-colors rounded-2xl">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div className="max-w-7xl px-4 sm:px-6 lg:px-2 py-2 flex items-center justify-between">
             <button
               onClick={() => back()}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:scale-105 hover:bg-blue-100 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100"
+              className="cursor-pointer flex items-center gap-1 px-2 py-2 rounded-lg transition-all hover:bg-blue-100 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100"
             >
               <ChevronLeft className="w-5 h-5" />
-              <span className="font-medium">Back to Blocks</span>
+              <span className="font-medium">{current?.title}</span>
             </button>
           </div>
         </div>

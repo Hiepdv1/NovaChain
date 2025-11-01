@@ -3,13 +3,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ChangeEvent } from 'react';
+import { ChangeEvent, useRef } from 'react';
 
 interface TransactionMessageProps {
   onInputMessage?: (e: ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
 const TransactionMessage = ({ onInputMessage }: TransactionMessageProps) => {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center space-x-2">
@@ -66,6 +68,7 @@ const TransactionMessage = ({ onInputMessage }: TransactionMessageProps) => {
                focus:outline-none resize-none"
           name="message"
           id="message"
+          ref={textareaRef}
           rows={5}
           maxLength={1000}
           placeholder="Add a note to this transaction (optional)"
@@ -74,7 +77,7 @@ const TransactionMessage = ({ onInputMessage }: TransactionMessageProps) => {
 
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <span>Encrypted private note — only visible to the recipient</span>
-        <span>0/1000</span>
+        <span>{textareaRef.current?.value.length || 0}/1000</span>
       </div>
     </div>
   );

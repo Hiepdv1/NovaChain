@@ -94,7 +94,7 @@ func (s *TransactionService) CreateNewTransaction(payload *utils.JWTPayload[type
 		return nil, internalErrCommon
 	}
 
-	var acc float64
+	acc := utils.NewCoinAmountFromFloat(0.0)
 	var spendable []dbutxo.Utxo
 
 	prevTxs := map[string]dbutxo.Utxo{}
@@ -105,10 +105,15 @@ func (s *TransactionService) CreateNewTransaction(payload *utils.JWTPayload[type
 			log.Errorf("Failed To Parse utxo: %v", err)
 			return nil, internalErrCommon
 		}
-		acc += value
+		valueTx := utils.NewCoinAmountFromFloat(value)
+		acc = acc.Add(valueTx)
 		spendable = append(spendable, utxo)
 		prevTxs[utxo.TxID] = utxo
-		if acc >= dto.Data.Amount+dto.Data.Fee {
+
+		amount := utils.NewCoinAmountFromFloat(dto.Data.Amount)
+		fee := utils.NewCoinAmountFromFloat(dto.Data.Fee)
+
+		if acc.Cmp(amount.Add(fee)) >= 0 {
 			break
 		}
 	}
@@ -125,7 +130,7 @@ func (s *TransactionService) CreateNewTransaction(payload *utils.JWTPayload[type
 		dto.Data.Amount,
 		dto.Data.Fee,
 		spendable,
-		acc,
+		acc.ToFloat(),
 	)
 
 	if apperr != nil {
@@ -371,6 +376,38 @@ func (s *TransactionService) SearchTransactions(queries *GetTransactionSearchDto
 		int64(page),
 		count,
 		queries.NextCursor,
+	)
+
+	return txs, pagination, nil
+}
+
+func (s *TransactionService) GetPendingTransactions(queries *GetTransactionPendingDto) ([]dbPendingTx.GetListPendingTxsRow, *response.PaginationMeta, *apperror.AppError) {
+	ctx := context.Background()
+
+	limit := int32(*queries.Limit)
+	page := int32(*queries.Page)
+
+	txs, err := s.dbRepo.GetPendingTransactions(ctx, dbPendingTx.GetListPendingTxsParams{
+		Offset: (page - 1) * limit,
+		Limit:  limit,
+	})
+
+	if err != nil {
+		log.Errorf("Failed to get pending transactions: %v", err)
+		return nil, nil, apperror.Internal("Internal server", nil)
+	}
+
+	count, err := s.dbRepo.GetCountPendingTransaction(ctx)
+	if err != nil {
+		log.Errorf("Failed to get count pending transactions: %v", err)
+		return nil, nil, apperror.Internal("Internal server", nil)
+	}
+
+	pagination := helpers.BuildPaginationMeta(
+		int64(limit),
+		int64(page),
+		count,
+		nil,
 	)
 
 	return txs, pagination, nil

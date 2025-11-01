@@ -59,3 +59,41 @@ func SetLog(InstanceId string) {
 	})
 	log.AddHook(rotateFileHook)
 }
+
+func ClearLogFile(relativePath string) error {
+	fullPath := filepath.Join(Root, relativePath)
+
+	absRoot, err := filepath.Abs(Root)
+	if err != nil {
+		return fmt.Errorf("failed to resolve root dir: %v", err)
+	}
+
+	absFull, err := filepath.Abs(fullPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve full path: %v", err)
+	}
+
+	if len(absFull) < len(absRoot) || absFull[:len(absRoot)] != absRoot {
+		return fmt.Errorf("access denied: file outside root dir")
+	}
+
+	if _, err := os.Stat(absFull); os.IsNotExist(err) {
+		return fmt.Errorf("log file does not exist: %s", absFull)
+	}
+
+	file, err := os.OpenFile(absFull, os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %v", err)
+	}
+	defer file.Close()
+
+	if err := file.Truncate(0); err != nil {
+		return fmt.Errorf("failed to truncate log file: %v", err)
+	}
+
+	if _, err := file.Seek(0, 0); err != nil {
+		return fmt.Errorf("failed to seek start: %v", err)
+	}
+
+	return nil
+}

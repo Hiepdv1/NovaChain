@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -129,7 +130,7 @@ func (s *WalletService) ImportWallet(dto *dto.WalletParsed) (*string, *apperror.
 				PublicKey:     helpers.StringToNullString(hex.EncodeToString(dto.PublicKey)),
 				Address:       helpers.StringToNullString(dto.Addr),
 				PublicKeyHash: pubKeyHash,
-				Balance:       helpers.FormatDecimal(balance.Balance, 8),
+				Balance:       fmt.Sprintf("%f", balance.Balance),
 				CreateAt: sql.NullTime{
 					Time:  time.Now(),
 					Valid: true,
@@ -222,8 +223,6 @@ func (s *WalletService) Disconnect(token string, payload utils.JWTPayload[types.
 func (s *WalletService) GetWallet(pubkey []byte) (*dbwallet.Wallet, *apperror.AppError) {
 	ctx := context.Background()
 
-	key := hex.EncodeToString(pubkey)
-
 	wallet, err := s.dbRepo.GetWalletByPubkey(ctx, pubkey, nil)
 
 	if err != nil {
@@ -233,10 +232,6 @@ func (s *WalletService) GetWallet(pubkey []byte) (*dbwallet.Wallet, *apperror.Ap
 
 		log.Error("Get wallet failed ", err)
 		return nil, apperror.Internal("Something went wrong. Please try again.", nil)
-	}
-
-	if err != nil {
-		log.Errorf("Failed to set wallet cache with pubKey %s: %v", key, err)
 	}
 
 	return wallet, nil

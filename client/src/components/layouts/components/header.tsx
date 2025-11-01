@@ -17,7 +17,6 @@ import { useDisconnectWalletMutation } from '@/features/wallet/hook/useWalletMut
 import { DelWalletPool, GetWalletPool } from '@/lib/db/wallet.index';
 import { formatAddress } from '@/lib/utils';
 import { StoredWallet } from '@/shared/types/wallet';
-import { frameData } from 'framer-motion';
 import {
   Activity,
   Check,
@@ -28,6 +27,7 @@ import {
   Send,
   Settings,
   Wallet,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -74,6 +74,7 @@ const Header = () => {
   const searchParams = useSearchParams();
   const query = searchParams.get('result_search');
   const router = useRouter();
+  const [activeSearch, setActiveSearch] = useState(false);
 
   useEffect(() => {
     GetWalletPool().then((ws) => {
@@ -205,22 +206,49 @@ const Header = () => {
           </div>
 
           {/* Right Side */}
-          <div className="flex items-center space-x-4">
-            <button className="md:hidden p-2 bg-white rounded-full dark:bg-slate-600">
-              <svg
-                className="w-5 h-5 text-gray-700 dark:text-gray-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                ></path>
-              </svg>
+          <div className="relative flex items-center max-sm:space-x-3 space-x-4">
+            <button
+              onClick={() => setActiveSearch((prev) => !prev)}
+              className="md:hidden p-2 bg-white rounded-full dark:bg-slate-600"
+            >
+              {!activeSearch && (
+                <svg
+                  className="w-5 h-5 text-gray-700 dark:text-gray-300"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  ></path>
+                </svg>
+              )}
+
+              {activeSearch && (
+                <X className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+              )}
             </button>
+
+            {activeSearch && (
+              <form
+                onSubmit={onSubmit}
+                className="animate-cascase-fade absolute md:hidden -bottom-[calc(100%+8px)] -right-7 w-screen"
+              >
+                <Input
+                  variant="levitating"
+                  inputSize="sm"
+                  className="dark:text-white z-50 px-4 dark:placeholder:text-white placeholder:text-black border-slate-400 font-normal py-3 rounded-xl !bg-gradient-glass text-sm text-black"
+                  id="search"
+                  name="result_search"
+                  type="search"
+                  defaultValue={query || ''}
+                  placeholder="Search by address, tx hash, or block ...."
+                />
+              </form>
+            )}
 
             <ModeToggle className="text-xs cursor-pointer rounded-full w-9 h-9" />
 
@@ -228,8 +256,8 @@ const Header = () => {
               <div className="outline-none select-none">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="outline-none cursor-pointer flex items-center space-x-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 border border-blue-200/50 dark:border-blue-700/50 rounded-xl transition-all duration-200 group">
-                      <div className="relative">
+                    <button className="outline-none cursor-pointer flex items-center max-sm:space-x-1 space-x-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 border border-blue-200/50 dark:border-blue-700/50 rounded-xl transition-all duration-200 group">
+                      <div className="relative !mr-0">
                         <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                           <Wallet className="w-4 h-4 text-white" />
                         </div>
@@ -253,7 +281,7 @@ const Header = () => {
                         </div>
                       </div>
 
-                      <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors duration-200" />
+                      <ChevronDown className="ml-3 max-sm:hidden w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors duration-200" />
                     </button>
                   </DropdownMenuTrigger>
 

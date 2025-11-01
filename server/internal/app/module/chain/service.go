@@ -8,11 +8,14 @@ import (
 	"ChainServer/internal/common/response"
 	"ChainServer/internal/common/utils"
 	dbchain "ChainServer/internal/db/chain"
+	"ChainServer/internal/states"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -35,7 +38,7 @@ func NewChainService(
 	}
 }
 
-func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.Block, *response.PaginationMeta, *apperror.AppError) {
+func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.GetListBlocksRow, *response.PaginationMeta, *apperror.AppError) {
 	ctx := context.Background()
 
 	limit := *dto.Limit
@@ -49,7 +52,7 @@ func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.Block, *res
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return make([]dbchain.Block, 0), nil, nil
+			return make([]dbchain.GetListBlocksRow, 0), nil, nil
 		}
 		return nil, nil, apperror.Internal("Failted to get blocks", err)
 	}
@@ -58,7 +61,7 @@ func (s *ChainService) GetBlocks(dto dto.PaginationQuery) ([]dbchain.Block, *res
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return make([]dbchain.Block, 0), nil, nil
+			return make([]dbchain.GetListBlocksRow, 0), nil, nil
 		}
 		return nil, nil, apperror.Internal("Failted to get blocks", err)
 	}
@@ -170,4 +173,48 @@ func (s *ChainService) GetBlockDetail(dto *GetBlockDetailDto) (BlockDetail, *app
 	}
 
 	return blockDetail, nil
+}
+
+func (s *ChainService) GetNetwork() (*NetworkInfo, *apperror.AppError) {
+	ctx := context.Background()
+
+	bestHeight, err := s.dbRepo.GetBestHeight(ctx, nil)
+	if err != nil {
+		log.Errorf("Failed to get best height: %v", err)
+		return nil, apperror.Internal("Something went wrong, please try again", nil)
+	}
+
+	recentBlocks, err := s.dbRepo.GetRecentBlocksForNetworkInfo(ctx, 10)
+	if err != nil {
+		log.Errorf("Failed to get recent blocks: %v", err)
+		return nil, apperror.Internal("Something went wrong, please try again", nil)
+	}
+
+	var nbitsList []uint32
+	var timestamps []int64
+	for _, block := range recentBlocks {
+		nbitsList = append(nbitsList, uint32(block.Nbits))
+		timestamps = append(timestamps, block.Timestamp)
+	}
+
+	avgDifficulty := utils.AverageDifficulty(nbitsList)
+	avgBlockTimes := utils.AverageBlockTime(timestamps)
+	hashrate := utils.CalculateHashrate(avgDifficulty, avgBlockTimes)
+	_, unit := utils.FormatHashrate(hashrate)
+
+	count, err := s.tranRepo.CountPendingTxs(ctx, nil)
+	if err != nil {
+		log.Errorf("Failed to get count tx pending: %v", err)
+		return nil, apperror.Internal("Something went wrong, please try again", nil)
+	}
+
+	return &NetworkInfo{
+		LastBlock:     bestHeight,
+		Hashrate:      fmt.Sprintf("%.2f %s", hashrate, unit),
+		AvgBlockTime:  avgBlockTimes,
+		AvgDifficulty: avgDifficulty,
+		SyncStatus:    states.ChainSyncState.SyncStatus,
+		TxPending:     count,
+		NetworkHealth: utils.EvaluateNetwork(avgBlockTimes, float64(10*time.Minute)),
+	}, nil
 }

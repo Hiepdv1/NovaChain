@@ -8,12 +8,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// func (net *Network) SendTxQueued(data *NetTxMining, SendTo string) {
-// 	payload := GobEncode(data)
-// 	request := append(CmdToBytes(PREFIX_TX_MINING), payload...)
-
-//		net.FullNodesChannel.Publish("Received getblocks", request, SendTo)
-//	}
 func (net *Network) SendTx(sendTo string, tx *blockchain.Transaction) {
 	txInfo := memopool.GetTxInfo(tx, net.Blockchain)
 	if txInfo == nil {
@@ -134,7 +128,7 @@ func (net *Network) SendGetDataTransaction(sendTo string, inv NetGetDataTransact
 func (net *Network) SendRequestTxFromPool(sendTo string, inv TxFromPool) {
 	payload := GobEncode(inv)
 	request := append(CmdToBytes(PREFIX_TX_FROM_POOL), payload...)
-	err := net.MiningChannel.Publish("Requesting transaction from mempool", request, sendTo)
+	err := net.FullNodesChannel.Publish("Requesting transaction from mempool", request, sendTo)
 	if err != nil {
 		log.Errorf("Failed to publish TxFromPool request: %v", err)
 		return
