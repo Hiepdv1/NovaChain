@@ -13,7 +13,6 @@ type TransactionDataDto struct {
 	Amount    float64 `json:"amount" validate:"required,gt=0"`
 	To        string  `json:"to" validate:"required,len=34"`
 	Timestamp int64   `json:"timestamp" validate:"required,gt=0"`
-	Message   string  `json:"message"`
 	Priority  uint64  `json:"priority" validate:"required,gte=0"`
 }
 
@@ -25,7 +24,6 @@ type NewTransactionDto struct {
 type SendTransactionDataDto struct {
 	Amount          float64         `json:"amount" validate:"required,gt=0"`
 	Fee             float64         `json:"fee" validate:"required,gt=0"`
-	Message         string          `json:"message"`
 	ReceiverAddress string          `json:"receiverAddress" validate:"required,len=34"`
 	Priority        uint            `json:"priority" validate:"required,gte=0"`
 	Transaction     dto.Transaction `json:"transaction" validate:"required"`
@@ -94,7 +92,6 @@ func (s *SendTransactionDto) ValidateAndParse() (any, error) {
 	}
 
 	return SendTransactionDataParsed{
-		Message:      s.Data.Message,
 		Priority:     s.Data.Priority,
 		Transaction:  tx,
 		ReceiverAddr: s.Data.ReceiverAddress,
@@ -152,6 +149,5 @@ type GetTransactionSearchDto struct {
 }
 
 type GetTransactionPendingDto struct {
-	Status string `query:"status" validate:"required,gte=1"`
 	dto.PaginationQuery
 }

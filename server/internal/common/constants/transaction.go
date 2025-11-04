@@ -8,14 +8,10 @@ type PriorityInfo struct {
 type TxStatus string
 
 const (
-	TxStatusPending   TxStatus = "pending"   // transaction in mempool, waiting to be picked
-	TxStatusMining    TxStatus = "mining"    // selected by miner, in candidate block
-	TxStatusMined     TxStatus = "mined"     // included in a block, not yet finalized
-	TxStatusConfirmed TxStatus = "confirmed" // block finalized, transaction safe
+	TxStatusPending TxStatus = "pending" // transaction in mempool, waiting to be picked
+	TxStatusMined   TxStatus = "mined"   // included in a block, not yet finalized
 
-	TxStatusFailed  TxStatus = "failed"  // invalid transaction (e.g., insufficient funds, bad signature)
-	TxStatusDropped TxStatus = "dropped" // removed from mempool (e.g., timeout, replaced)
-	TxStatusReorged TxStatus = "reorged" // transaction was in block, but removed due to chain reorg
+	TxStatusFailed TxStatus = "failed" // invalid transaction (e.g., insufficient funds, bad signature)
 )
 
 const (

@@ -32,8 +32,30 @@ ORDER BY created_at DESC
 OFFSET $1
 LIMIT $2;
 
+-- name: GetPendingTxsByStatus :many
+SELECT 
+  id,
+  tx_id,
+  address,
+  receiver_address,
+  status,
+  amount,
+  fee,
+  priority,
+  created_at,
+  updated_at
+FROM pending_transactions
+WHERE status = ANY(sqlc.arg(statuses)::text[])
+ORDER BY created_at DESC
+OFFSET $1
+LIMIT $2;
+
 -- name: GetCountPendingTxs :one
 SELECT COUNT(*) FROM pending_transactions;
+
+-- name: GetCountPendingTxsByStatus :one
+SELECT COUNT(*) FROM pending_transactions
+WHERE status = ANY(sqlc.arg(statuses)::text[]);
 
 -- name: SelectPendingTransactions :many
 SELECT p.*, pd.raw_tx, pd.pub_key_hash

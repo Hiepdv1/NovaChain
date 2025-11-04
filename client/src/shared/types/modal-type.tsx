@@ -28,7 +28,6 @@ export interface TransactionDetailModalProps {
   from: string;
   to: string;
   fee: number;
-  message: string;
   amount: number;
   transaction: ResCreateNewTransaction;
   privateKey: string;

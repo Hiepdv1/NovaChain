@@ -36,12 +36,9 @@ const BlockCard = ({ block }: BlockCardProps) => {
       className="block rounded-xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl bg-white dark:bg-gray-800 shadow-md dark:shadow-lg animate-block-fade-in"
     >
       <div className="flex items-center justify-between mb-4">
-        <a
-          href="#"
-          className="text-2xl font-bold text-blue-500 hover:text-blue-400 transition-colors"
-        >
+        <span className="text-2xl font-bold text-blue-500 hover:text-blue-400 transition-colors">
           #{block.Height}
-        </a>
+        </span>
         <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
           {FormatTimestamp(block.Timestamp)}
         </span>

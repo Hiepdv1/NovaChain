@@ -1,7 +1,7 @@
 package p2p
 
 const (
-	MAX_HEADERS_PER_MSG = 2000
+	MAX_HEADERS_PER_MSG = 500
 
 	// Prefix Sync block
 	PREFIX_BLOCK          = "block"

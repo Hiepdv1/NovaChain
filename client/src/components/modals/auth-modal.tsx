@@ -344,7 +344,7 @@ const AuthModal = ({
                 onClick={onCancel}
                 disabled={!status.valid}
               >
-                Cancel
+                Switch Wallet
                 {submit.isCancel && (
                   <svg
                     id="loadingIcon"

@@ -284,7 +284,7 @@ func ConnectBootstrapPeers(ctx context.Context, host host.Host, kademliaDHT *dht
 			tctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 			defer cancel()
 			if _, err := kademliaDHT.FindPeer(tctx, p.ID); err != nil {
-				log.Debugf("DHT FindPeer (warmup) returned error for %s: %v", p.ID.String(), err)
+				log.Warnf("DHT FindPeer (warmup) returned error for %s: %v", p.ID.String(), err)
 			} else {
 				log.Infof("🌐 DHT warmed up with peer: %s", p.ID.String())
 			}
@@ -311,14 +311,14 @@ func AutoAdvertise(ctx context.Context, dht *dht.IpfsDHT, rendezvous string) {
 			return
 		case <-ticker.C:
 			if _, err := discoveryWithBackoff.Advertise(ctx, rendezvous); err != nil {
-				log.Debugf("Advertise failed (will retry): %v", err)
+				log.Warnf("Advertise failed (will retry): %v", err)
 				continue
 			}
 
 			time.Sleep(2 * time.Second)
 			peers := dht.RoutingTable().ListPeers()
 			if len(peers) == 0 {
-				log.Debug("Advertised but routing table still empty")
+				log.Info("Advertised but routing table still empty")
 				continue
 			}
 			log.Infof("✅ Advertised ourselves successfully to %d peers.", len(peers))

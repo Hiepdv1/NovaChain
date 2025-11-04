@@ -27,23 +27,19 @@ func (r *TransactionRoutes) InitRoutes(router fiber.Router) {
 func (r *TransactionRoutes) RegisterPublic(router fiber.Router) {
 	publicGroup := r.transactionGroup.Group("/__pub")
 
+	publicGroup.Get("/search",
+		middlewares.ValidateQuery[GetTransactionSearchDto](false),
+		r.handler.SearchTransactions,
+	)
+
 	publicGroup.Get("/pending",
 		middlewares.ValidateQuery[GetTransactionPendingDto](false),
 		r.handler.GetPendingTransactions,
 	)
 
-	publicGroup.Get("/:txId",
-		r.handler.GetDetailTransaction,
-	)
-
 	publicGroup.Get("/",
 		middlewares.ValidateQuery[dto.PaginationQuery](false),
 		r.handler.GetListTransaction,
-	)
-
-	publicGroup.Get("/search",
-		middlewares.ValidateQuery[GetTransactionSearchDto](false),
-		r.handler.SearchTransactions,
 	)
 
 }

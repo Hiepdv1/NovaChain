@@ -70,74 +70,6 @@ func (j *jobBlockSync) handleCreateUtxo(block *chain.Block, sqlTx *sql.Tx) error
 	return nil
 }
 
-func (j *jobBlockSync) handleReorganizationUtxo(block *dbchain.Block, sqlTx *sql.Tx) error {
-	ctx := context.Background()
-	log.Infof("handleReorganizationUtxo: Starting UTXO reorganization for block hash=%s height=%d", block.BID, block.Height)
-
-	txOutputs, err := j.dbTrans.FindListTxOutputByBlockHash(ctx, block.BID, sqlTx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			txOutputs = make([]dbchain.TxOutput, 0)
-			log.Debugf("handleReorganizationUtxo: No tx outputs found for block=%s", block.BID)
-		} else {
-			log.Errorf("handleReorganizationUtxo: Failed to fetch tx outputs for block=%s: %v", block.BID, err)
-			return err
-		}
-	}
-
-	txInputs, err := j.dbTrans.FindListTxInputByBlockHash(ctx, block.BID, sqlTx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			txInputs = make([]dbchain.TxInput, 0)
-			log.Debugf("handleReorganizationUtxo: No tx inputs found for block=%s", block.BID)
-		} else {
-			log.Errorf("handleReorganizationUtxo: Failed to fetch tx inputs for block=%s: %v", block.BID, err)
-			return err
-		}
-	}
-
-	log.Infof("handleReorganizationUtxo: Deleting %d UTXOs for block=%s during reorganization", len(txOutputs), block.BID)
-	for range txOutputs {
-		if err := j.dbUtxo.DeleteUTXOByBlockID(ctx, block.BID, sqlTx); err != nil {
-			log.Errorf("handleReorganizationUtxo: Failed to delete UTXO for block=%s: %v", block.BID, err)
-			return err
-		}
-		log.Debugf("handleReorganizationUtxo: Deleted UTXO for block=%s", block.BID)
-	}
-
-	for _, in := range txInputs {
-		log.Debugf("handleReorganizationUtxo: Recreating UTXO for input TxID=%s OutIndex=%d in block=%s", in.InputTxID.String, in.OutIndex, block.BID)
-		getOutparams := dbchain.GetTxOutputByTxIDAndIndexParams{
-			TxID:  in.InputTxID.String,
-			Index: in.OutIndex,
-		}
-		output, err := j.dbTrans.GetTxOutputByTxIDAndIndex(ctx, getOutparams, sqlTx)
-		if err != nil {
-			log.Errorf("handleReorganizationUtxo: Failed to get output for input TxID=%s Index=%d in block=%s: %v", in.InputTxID.String, in.OutIndex, block.BID, err)
-			return err
-		}
-
-		createUtxoParams := dbutxo.CreateUTXOParams{
-			TxID:        in.InputTxID.String,
-			OutputIndex: in.OutIndex,
-			Value:       output.Value,
-			PubKeyHash:  output.PubKeyHash,
-			BlockID:     block.BID,
-		}
-
-		utxo, err := j.dbUtxo.CreateUTXO(ctx, createUtxoParams, sqlTx)
-		if err != nil {
-			log.Errorf("handleReorganizationUtxo: Failed to recreate UTXO for input TxID=%s Index=%d in block=%s: %v", in.InputTxID.String, in.OutIndex, block.BID, err)
-			return err
-		}
-
-		log.Infof("handleReorganizationUtxo: Recreated UTXO TxID=%s OutputIndex=%d Value=%s PubKeyHash=%s in block=%s: %v", in.InputTxID.String, in.OutIndex, output.Value, output.PubKeyHash, block.BID, utxo)
-	}
-
-	log.Infof("handleReorganizationUtxo: Completed UTXO reorganization for block hash=%s (recreated %d UTXOs)", block.BID, len(txInputs))
-	return nil
-}
-
 func (j *jobBlockSync) handleCreateInput(ins []dto.TxInput, b_id, txHash string, tx *sql.Tx) error {
 	ctx := context.Background()
 	log.Infof("handleCreateInput: Starting input creation for tx=%s block=%s (%d inputs)", txHash, b_id, len(ins))
@@ -402,7 +334,6 @@ func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*dto.
 				TxID: tx.ID,
 				Status: []string{
 					string(constants.TxStatusPending),
-					string(constants.TxStatusMining),
 				},
 			},
 			sqlTx,
@@ -420,7 +351,6 @@ func (j *jobBlockSync) handleCreateTransactions(ctx context.Context, txs []*dto.
 				TxIds:     []string{tx.ID},
 				OldStatus: []string{
 					string(constants.TxStatusPending),
-					string(constants.TxStatusMining),
 				},
 			}, sqlTx)
 
@@ -504,7 +434,7 @@ func (j *jobBlockSync) handleReorganizationBlocks(tx *sql.Tx) error {
 	log.Infof("🔍 [Reorg] Common block found at height=%d (hash=%s)", commonBlock.Height, commonBlock.Hash)
 	log.Infof("🧹 [Reorg] Removing blocks from height=%d to height=%d...", commonBlock.Height, bestHeight)
 
-	err = j.dbChain.DeleteBlockByRangeHeight(ctx, commonBlock.Height, bestHeight, tx)
+	err = j.dbChain.DeleteBlockByRangeHeight(ctx, commonBlock.Height+1, bestHeight, tx)
 	if err != nil {
 		log.Error("❌ [Reorg] Failed to delete old blocks: ", err)
 		return err
@@ -633,7 +563,7 @@ func (j *jobBlockSync) StartBlockSync(interval time.Duration) {
 			continue
 		}
 
-		log.Infof("📥 [SyncLoop] Retrieved %d new blocks (heights %d → %d)", len(blocks), blocks[0].Height, blocks[len(blocks)-1].Height)
+		log.Infof("📥 [SyncLoop] Retrieved %d new blocks (heights %d → %d)", len(blocks), blocks[len(blocks)-1].Height, blocks[0].Height)
 
 		tx, err := db.Psql.BeginTx(ctx, nil)
 		if err != nil {

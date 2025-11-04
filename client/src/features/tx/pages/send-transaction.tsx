@@ -21,16 +21,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import TransactionFee, {
-  FeeList,
-  FeeOption,
-} from '../components/transaction-fee';
-import TransactionMessage from '../components/transaction-message';
+
 import { IsValidNumber } from '@/lib/utils';
 import ContentLoading from '@/components/loading/content-loading';
 import { toast } from '@/components/globalToaster';
-import TransactionPreview from '../components/transaction-preview';
-import NetworkStatus from '../components/network-status';
+import TransactionPreview from '../components/sendTx/transaction-preview';
+import NetworkStatus from '../components/sendTx/network-status';
 import { useModalStore } from '@/stores/modal-store';
 import { StoredWallet } from '@/shared/types/wallet';
 import {
@@ -38,11 +34,13 @@ import {
   ResCreateNewTransaction,
 } from '../types/transaction';
 import { useTransactionPending } from '../hook/useTransactionQuery';
-import TransactionPending from '../components/tx-pending';
+import TransactionPending from '../components/sendTx/tx-pending';
 import { useNetworkInfo } from '@/features/block/hooks/useBlockQuery';
 import ErrorState from '@/components/errorState';
 import { CACHE_TIME } from '@/shared/constants/ttl';
 import { FormatFloat, FormatSeconds } from '@/shared/utils/format';
+import { FeeList, FeeOption } from '@/shared/constants/transaction';
+import TransactionFee from '../components/sendTx/transaction-fee';
 
 type RefMap = {
   btnVerify: HTMLButtonElement | null;
@@ -64,7 +62,6 @@ type ValidateForm = {
     message: string | null;
     value: number;
   };
-  message?: string;
 };
 
 type SubmitForm = {
@@ -90,15 +87,14 @@ const SendTransactionPage = () => {
       isLoading: false,
       valid: false,
       isLock: false,
-      message: null,
       value: '',
+      message: null,
     },
     amount: {
       message: null,
       valid: false,
       value: 0,
     },
-    message: '',
   });
   const [currentFee, setCurrentFee] = useState<FeeOption>(
     FeeList.find((f) => f.checked)!,
@@ -111,7 +107,10 @@ const SendTransactionPage = () => {
     refetch: refreshTxPending,
     isError: isErrorTxPending,
   } = useTransactionPending(
-    {},
+    {
+      limit: 1,
+      page: 1,
+    },
     {
       retry: false,
       staleTime: 0,
@@ -335,7 +334,6 @@ const SendTransactionPage = () => {
         amount: payload.data.amount,
         fee: payload.data.fee,
         priority: payload.data.priority,
-        message: payload.data.message,
         to: payload.data.to,
         from: w.address,
         balance: parseFloat(wallet?.data?.Balance || '0'),
@@ -375,7 +373,6 @@ const SendTransactionPage = () => {
           fee: fee.fee,
           timestamp: Math.floor(Date.now() / 1000),
           to: inputRecipient.value,
-          message: data.message,
           priority: fee.priority,
         },
       },
@@ -399,16 +396,6 @@ const SendTransactionPage = () => {
       `Set to ${percentage}% of balance (${wallet.data.Balance} CCC)`,
     );
   };
-
-  const onInputMessage = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
-    const textarea = e.currentTarget;
-    setValidate((prev) => {
-      return {
-        ...prev,
-        message: textarea.value,
-      };
-    });
-  }, []);
 
   useEffect(() => {
     const updateFormButton = () => {
@@ -894,9 +881,6 @@ const SendTransactionPage = () => {
               {/* Transaction Fee */}
               <TransactionFee onChecked={onCheckedFee} />
 
-              {/* Transaction Message */}
-              <TransactionMessage onInputMessage={onInputMessage} />
-
               {/* Transaction actions */}
               <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-6">
                 <Button
@@ -944,7 +928,6 @@ const SendTransactionPage = () => {
             data={{
               amount: validate.amount.value,
               fee: currentFee.fee,
-              message: validate.message || '',
             }}
           />
 

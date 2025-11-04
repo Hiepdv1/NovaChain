@@ -224,7 +224,7 @@ func (r *dbChainRepository) DeleteBlockByRangeHeight(ctx context.Context, start,
 		q = r.queries.WithTx(tx)
 	}
 
-	for start > end {
+	for start <= end {
 		err := q.DeleteBlockByHeight(ctx, start)
 		if err != nil {
 			return err

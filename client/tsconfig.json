@@ -28,6 +28,6 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "tailwind.config.ts"
-  ],
+, "src/features/tx/components/txs/tx-table.tsx"  ],
   "exclude": ["node_modules"]
 }

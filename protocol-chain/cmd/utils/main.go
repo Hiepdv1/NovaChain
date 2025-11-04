@@ -512,13 +512,9 @@ func (cli *CommandLine) GetCommonBlock(locator [][]byte) (*blockchain.Block, err
 	}
 
 	for _, bHash := range locator {
-		block, err := chain.GetBlock(bHash)
+		block, err := chain.GetBlockMainChain(bHash)
 		if err != nil {
-			if errors.Is(err, badger.ErrEmptyKey) {
-				continue
-			} else {
-				return nil, err
-			}
+			continue
 		}
 
 		commonBlock = &block

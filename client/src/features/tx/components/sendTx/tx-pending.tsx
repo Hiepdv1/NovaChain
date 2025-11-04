@@ -1,59 +1,32 @@
 import { toast } from '@/components/globalToaster';
-import type { TransactionPending } from '../types/transaction';
-
-type TransactionStatus = 'pending' | 'mining' | 'confirmed';
+import type { TransactionPending } from '../../types/transaction';
 
 const statusConfig = {
-  pending: {
-    icon: (
-      <div className="relative w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center">
-        <div className="absolute inset-0 border-3 border-blue-300 dark:border-blue-400 rounded-full animate-spin opacity-30"></div>
-        <div
-          className="absolute inset-2 border-3 border-indigo-400 dark:border-indigo-300 rounded-full animate-spin opacity-50"
-          style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}
-        ></div>
-        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-400 dark:to-indigo-500 rounded-full flex items-center justify-center shadow-lg">
-          <span className="text-2xl">⏳</span>
-        </div>
+  icon: (
+    <div className="relative w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center">
+      <div className="absolute inset-0 border-3 border-blue-300 dark:border-blue-400 rounded-full animate-spin opacity-30"></div>
+      <div
+        className="absolute inset-2 border-3 border-indigo-400 dark:border-indigo-300 rounded-full animate-spin opacity-50"
+        style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}
+      ></div>
+      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-400 dark:to-indigo-500 rounded-full flex items-center justify-center shadow-lg">
+        <span className="text-2xl">⏳</span>
       </div>
-    ),
-    label: 'Transaction Pending',
-    bgColor: 'bg-blue-50 dark:bg-blue-950/30',
-    borderColor: 'border-blue-200 dark:border-blue-800',
-    textColor: 'text-blue-900 dark:text-blue-100',
-    accentColor: 'text-blue-600 dark:text-blue-400',
-    description: 'Your transaction has been submitted successfully',
-    subDescription: 'Waiting in the mempool queue for miners',
-    notice:
-      'Transaction is securely queued in the mempool. In PoW blockchain, transactions are processed sequentially to maintain security.',
-  },
-  mining: {
-    icon: (
-      <div className="relative w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center">
-        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 dark:from-orange-400 dark:to-red-500 rounded-full flex items-center justify-center shadow-lg relative overflow-hidden">
-          <span className="text-2xl relative z-10">⚒️</span>
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-300/30 to-transparent animate-pulse"></div>
-        </div>
-        <div className="absolute -top-1 -right-1 w-6 h-6 bg-yellow-400 dark:bg-yellow-300 rounded-full flex items-center justify-center animate-bounce">
-          <div className="w-2 h-2 bg-orange-600 dark:bg-orange-500 rounded-full"></div>
-        </div>
-      </div>
-    ),
-    label: 'Mining in Progress',
-    bgColor: 'bg-orange-50 dark:bg-orange-950/30',
-    borderColor: 'border-orange-200 dark:border-orange-800',
-    textColor: 'text-orange-900 dark:text-orange-100',
-    accentColor: 'text-orange-600 dark:text-orange-400',
-    description: 'Your transaction is being processed by miners',
-    subDescription: 'Being included in the next block',
-    notice:
-      'Miners are currently validating your transaction. This process ensures the security and permanence of your transaction.',
-  },
+    </div>
+  ),
+  label: 'Transaction Pending',
+  bgColor: 'bg-blue-50 dark:bg-blue-950/30',
+  borderColor: 'border-blue-200 dark:border-blue-800',
+  textColor: 'text-blue-900 dark:text-blue-100',
+  accentColor: 'text-blue-600 dark:text-blue-400',
+  description: 'Your transaction has been submitted successfully',
+  subDescription: 'Waiting in the mempool queue for miners',
+  notice:
+    'Transaction is securely queued in the mempool. In PoW blockchain, transactions are processed sequentially to maintain security.',
 };
 
 const TransactionPending = (data: TransactionPending) => {
-  const status: TransactionStatus = data.Status;
-  const currentStatus = statusConfig[status];
+  const currentStatus = statusConfig;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

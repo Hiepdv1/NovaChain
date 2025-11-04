@@ -3,11 +3,13 @@ import {
   CreateNewTXPayload,
   ResCreateNewTransaction,
   SendTransactionPayload,
+  TransactionItem,
   TransactionPending,
 } from '../types/transaction';
 import { http } from '@/lib/axios/http';
 import { BaseResponse, BaseResponseList } from '@/shared/types/api';
 import { DecryptData, EncryptData } from '@/lib/crypto/encode';
+import { PaginationParam } from '@/shared/types/query';
 
 class TransactionService {
   public async CreateNewTransaction(data: CreateNewTXPayload) {
@@ -45,7 +47,7 @@ class TransactionService {
     }
   }
 
-  public async GetPendingTxByUser(params: { page?: number; limit?: number }) {
+  public async GetPendingTxByUser(params: PaginationParam) {
     try {
       const res = await http.get<BaseResponseList<TransactionPending[] | null>>(
         '/txs/__pri/pending',
@@ -53,6 +55,40 @@ class TransactionService {
           params: {
             limit: params.limit || 1,
             page: params.page || 1,
+          },
+        },
+      );
+      return res.data;
+    } catch (err) {
+      throw handleApiError(err);
+    }
+  }
+
+  public async GetPendingTxs(params: PaginationParam) {
+    try {
+      const res = await http.get<BaseResponseList<TransactionPending[]>>(
+        '/txs/__pub/pending',
+        {
+          params: {
+            limit: params.limit || 1,
+            page: params.page || 1,
+          },
+        },
+      );
+      return res.data;
+    } catch (err) {
+      throw handleApiError(err);
+    }
+  }
+
+  public async GetListTransactions(params: PaginationParam) {
+    try {
+      const res = await http.get<BaseResponseList<TransactionItem[]>>(
+        '/txs/__pub/',
+        {
+          params: {
+            limit: params.limit,
+            page: params.page,
           },
         },
       );

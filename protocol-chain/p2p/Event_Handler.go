@@ -169,69 +169,70 @@ func (net *Network) HandleGetBlockDataSync(content *ChannelContent) {
 	buf.Write(content.Payload[commandLength:])
 	dec := gob.NewDecoder(buf)
 	if err := dec.Decode(&payload); err != nil {
-		log.Errorf("[Sync] ❌ Aborted: cannot decode block data from peer %s", content.SendFrom)
+		log.Errorf("[Sync]❌ Aborted: cannot decode block data from peer %s", content.SendFrom)
 		return
 	}
 
 	bestPeer := net.syncManager.GetTargetPeer()
 	if payload.SendFrom != bestPeer.ID {
-		log.Warnf("[Sync] ⚠️ Ignored block data from %s (expected best peer %s)", payload.SendFrom, bestPeer.ID)
+		log.Warnf("[Sync]⚠️ Ignored block data from %s (expected best peer %s)", payload.SendFrom, bestPeer.ID)
 		return
 	}
 
-	log.Infof("[Sync] 📥 Received %d blocks from best peer %s (peer height=%d)", len(payload.Blocks), payload.SendFrom, bestPeer.Height)
+	log.Infof("[Sync]📥 Received %d blocks from best peer %s (peer height=%d)", len(payload.Blocks), payload.SendFrom, bestPeer.Height)
+
+	isBadPeer := false
 
 	for i := len(payload.Blocks) - 1; i >= 0; i-- {
 		block := payload.Blocks[i]
 
 		hasBlock, err := net.Blockchain.HasBlock(block.Hash)
 		if err != nil {
-			log.Errorf("[Sync] ❌ Aborted: failed to check block %x at height %d: %v", block.Hash[:6], block.Height, err)
+			log.Errorf("[Sync]❌ Aborted: failed to check block %x at height %d: %v", block.Hash[:6], block.Height, err)
 			return
 		}
 
 		if hasBlock {
-			log.Infof("[Sync] ⚠️ Skipped block %d (%x): already in chain", block.Height, block.Hash[:6])
+			log.Infof("[Sync]⚠️ Skipped block %d (%x): already in chain", block.Height, block.Hash[:6])
 			continue
 		}
 
 		if err := net.Blockchain.AddBlock(&block, net.HandleReoganizeTx); err != nil {
-			log.Errorf("[Sync] ❌ Aborted: cannot add block %d (%x): %v", block.Height, block.Hash[:6], err)
-			return
+			log.Errorf("[Sync]❌ Aborted: cannot add block %d (%x): %v", block.Height, block.Hash[:6], err)
+			isBadPeer = true
+			break
 		}
 
 		log.Infof("[Sync] ✅ Added block %d (%x) to chain", block.Height, block.Hash[:6])
 	}
 
-	UTXO := blockchain.UTXOSet{Blockchain: net.Blockchain}
-	if err := UTXO.Compute(); err != nil {
-		log.Errorf("[Sync] ❌ Failed to recompute UTXO: %v", err)
-		return
-	}
-	log.Info("[Sync] 🗂️ UTXO recomputed after block batch")
-
-	currentHeight, err := net.Blockchain.GetBestHeight()
+	locator, err := net.Blockchain.GetBlockLocator()
 	if err != nil {
-		log.Errorf("[Sync] ❌ Failed to get best height: %v", err)
+		log.Errorf("[Sync]❌ Failed to build block locator: %v", err)
 		return
 	}
 
-	if currentHeight < bestPeer.Height {
-		locator, err := net.Blockchain.GetBlockLocator()
-		if err != nil {
-			log.Errorf("[Sync] ❌ Failed to build block locator: %v", err)
-			return
-		}
-		net.SendHeaderLocator(payload.SendFrom, NetHeaderLocator{
-			SendFrom: net.Host.ID().String(),
-			Locator:  locator,
-		})
-		net.syncCompleted = false
-		log.Infof("[Sync] ⏩ Local height=%d < Peer height=%d → requesting more blocks...", currentHeight, bestPeer.Height)
-	} else {
-		net.syncCompleted = true
-		log.Infof("[Sync] 🎉 Node fully synced with peer %s at height=%d", payload.SendFrom, currentHeight)
+	excludePeerIDs := []string{
+		net.Host.ID().String(),
 	}
+
+	if isBadPeer {
+		net.syncManager.ClearTarget()
+		excludePeerIDs = append(excludePeerIDs, payload.SendFrom)
+	}
+
+	time.Sleep(time.Second)
+
+	net.Gossip.Broadcast(
+		net.FullNodesChannel.ListPeers(),
+		excludePeerIDs,
+		func(p peer.ID) {
+			net.SendHeaderLocator(p.String(), NetHeaderLocator{
+				SendFrom: net.Host.ID().String(),
+				Locator:  locator,
+			})
+		},
+	)
 }
 
 func (net *Network) HandleGetDataSync(content *ChannelContent) {
@@ -248,7 +249,7 @@ func (net *Network) HandleGetDataSync(content *ChannelContent) {
 
 	blocks := make([]blockchain.Block, 0)
 	for _, blockByte := range payload.Hashes {
-		block, err := net.Blockchain.GetBlock(blockByte)
+		block, err := net.Blockchain.GetBlockMainChain(blockByte)
 		if err != nil {
 			log.Error("Failed to retrieve block for sync")
 			return
@@ -290,11 +291,6 @@ func (net *Network) HandleGetHeaderSync(content *ChannelContent) {
 	}
 
 	if len(payload.Data) < 1 {
-		net.syncManager.UpdatePeerStatus(
-			payload.SendFrom,
-			payload.BestHeight,
-			big.NewInt(0),
-		)
 		bestPeer := net.syncManager.GetTargetPeer()
 
 		if bestPeer != nil && bestPeer.Height >= bestHeight {
@@ -302,8 +298,22 @@ func (net *Network) HandleGetHeaderSync(content *ChannelContent) {
 				payload.SendFrom, bestHeight)
 			net.syncCompleted = true
 		} else {
-			log.Infof("Header sync: received empty headers from peer %s (local best height: %d, peer best height: %d)",
-				payload.SendFrom, bestHeight, payload.BestHeight)
+			net.syncManager.UpdatePeerStatus(
+				payload.SendFrom,
+				payload.BestHeight,
+				big.NewInt(0),
+			)
+
+			bestPeer := net.syncManager.GetTargetPeer()
+
+			if bestPeer != nil && bestPeer.Height >= bestHeight {
+				log.Infof("✅ Header sync completed: peer %s chain matches local best height %d",
+					payload.SendFrom, bestHeight)
+				net.syncCompleted = true
+			} else {
+				log.Infof("Header sync: received empty headers from peer %s (local best height: %d, peer best height: %d)",
+					payload.SendFrom, bestHeight, payload.BestHeight)
+			}
 		}
 
 		return
@@ -375,7 +385,7 @@ func (net *Network) HandleGetHeaderLocator(content *ChannelContent) {
 
 	var commonBlock *blockchain.Block
 	for _, hashByte := range payload.Locator {
-		block, err := net.Blockchain.GetBlock(hashByte)
+		block, err := net.Blockchain.GetBlockMainChain(hashByte)
 		if err != nil {
 			continue
 		}
@@ -438,25 +448,25 @@ func (net *Network) HandleGetBlockData(content *ChannelContent) {
 	dec := gob.NewDecoder(buf)
 	err := dec.Decode(&payload)
 	if err != nil {
-		log.Errorf("[HandleGetBlockData] ❌ Failed to decode block data request from peer %s: %v", content.SendFrom, err)
+		log.Errorf("[HandleGetBlockData]❌ Failed to decode block data request from peer %s: %v", content.SendFrom, err)
 		return
 	}
 
 	block := &blockchain.Block{}
 	block = blockchain.DeserializeBlockData(payload.Block)
 
-	log.Infof("[HandleGetBlockData] 📥 Received block data %x (height=%d) from peer %s", block.Hash[:6], block.Height, payload.SendFrom)
+	log.Infof("[HandleGetBlockData]📥 Received block data %x (height=%d) from peer %s", block.Hash[:6], block.Height, payload.SendFrom)
 
 	hasBlock, err := net.Blockchain.HasBlock(block.Hash)
 	if err != nil {
-		log.Errorf("[HandleGetBlockData] ❌ Error checking block existence %x: %v", block.Hash[:6], err)
+		log.Errorf("[HandleGetBlockData]❌ Error checking block existence %x: %v", block.Hash[:6], err)
 		return
 	}
 
 	if hasBlock {
-		log.Warnf("[HandleGetBlockData] ⚠️ Block %x (height=%d) already exists", block.Hash[:6], block.Height)
+		log.Warnf("[HandleGetBlockData]⚠️ Block %x (height=%d) already exists", block.Hash[:6], block.Height)
 		if !net.Gossip.HasSeen(hex.EncodeToString(block.Hash), payload.SendFrom) {
-			log.Infof("[HandleGetBlockData] 🔄 Rebroadcasting header for existing block %x", block.Hash[:6])
+			log.Infof("[HandleGetBlockData]🔄 Rebroadcasting header for existing block %x", block.Hash[:6])
 			net.Gossip.Broadcast(
 				net.FullNodesChannel.ListPeers(),
 				[]string{net.Host.ID().String(), payload.SendFrom},
@@ -476,11 +486,11 @@ func (net *Network) HandleGetBlockData(content *ChannelContent) {
 
 	err = net.Blockchain.AddBlock(block, net.HandleReoganizeTx)
 	if err != nil {
-		log.Errorf("[HandleGetBlockData] ❌ Failed to add block %x: %v", block.Hash[:6], err)
+		log.Errorf("[HandleGetBlockData]❌ Failed to add block %x: %v", block.Hash[:6], err)
 		return
 	}
 
-	log.Infof("[HandleGetBlockData] ✅ Block %d (%x) added to chain", block.Height, block.Hash[:6])
+	log.Infof("[HandleGetBlockData]✅ Block %d (%x) added to chain", block.Height, block.Hash[:6])
 
 	for _, tx := range block.Transactions {
 		txID := hex.EncodeToString(tx.ID)
@@ -488,20 +498,11 @@ func (net *Network) HandleGetBlockData(content *ChannelContent) {
 	}
 
 	if net.Miner && net.IsMining {
-		log.Infof("[HandleGetBlockData] ⛏️ Competing block received while mining: %x", block.Hash[:6])
+		log.Infof("[HandleGetBlockData]⛏️ Competing block received while mining: %x", block.Hash[:6])
 		net.competingBlockChan <- block
 	}
 
-	UTXO := blockchain.UTXOSet{Blockchain: net.Blockchain}
-	err = UTXO.Compute()
-	if err != nil {
-		log.Errorf("[HandleGetBlockData] ❌ Failed to recompute UTXO after block %x: %v", block.Hash[:6], err)
-		return
-	}
-
-	log.Infof("[HandleGetBlockData] UTXO set recomputed successfully after block %x", block.Hash[:6])
-
-	log.Infof("[HandleGetBlockData] Broadcasting block header hash=%x height=%d to peers (excluding sender=%s)", block.Hash[:6], block.Height, payload.SendFrom)
+	log.Infof("[HandleGetBlockData]Broadcasting block header hash=%x height=%d to peers (excluding sender=%s)", block.Hash[:6], block.Height, payload.SendFrom)
 	net.Gossip.Broadcast(
 		net.FullNodesChannel.ListPeers(),
 		[]string{net.Host.ID().String(), payload.SendFrom},
@@ -515,7 +516,7 @@ func (net *Network) HandleGetBlockData(content *ChannelContent) {
 			net.Gossip.MarkSeen(hex.EncodeToString(block.Hash), p.String())
 		},
 	)
-	log.Debugf("[HandleGetBlockData] Completed handling GetBlockData from peer=%s for block hash=%x height=%d", content.SendFrom, block.Hash[:6], block.Height)
+	log.Debugf("[HandleGetBlockData]Completed handling GetBlockData from peer=%s for block hash=%x height=%d", content.SendFrom, block.Hash[:6], block.Height)
 }
 
 func (net *Network) HandleGetData(content *ChannelContent) {
@@ -531,7 +532,7 @@ func (net *Network) HandleGetData(content *ChannelContent) {
 		return
 	}
 
-	block, err := net.Blockchain.GetBlock(payload.Hash)
+	block, err := net.Blockchain.GetBlockMainChain(payload.Hash)
 	if err != nil {
 		log.Errorf("Block %x not found in chain", payload.Hash[:6])
 		return
@@ -544,10 +545,6 @@ func (net *Network) HandleGetData(content *ChannelContent) {
 }
 
 func (net *Network) HandleGetHeader(content *ChannelContent) {
-	if !net.syncCompleted {
-		return
-	}
-
 	buf := new(bytes.Buffer)
 	var payload NetHeader
 
@@ -602,6 +599,7 @@ func (net *Network) HandleGetHeader(content *ChannelContent) {
 
 	} else {
 		if bytes.Equal(lastBlock.Hash, payload.PrevHash) {
+			net.syncCompleted = true
 			log.Infof("Header [%s] links to last known block — requesting full block from peer [%s]", shortHash, peerID)
 			net.SendGetData(peerID, NetGetData{
 				SendFrom: net.Host.ID().String(),
@@ -625,7 +623,7 @@ func (net *Network) HandleGetHeader(content *ChannelContent) {
 			})
 			log.Infof("Sent header locator request to peer [%s]", peerID)
 		} else {
-			log.Debugf("Received non-continuous header [%s] from peer [%s] — no action taken", shortHash, peerID)
+			log.Infof("Received non-continuous header [%s] from peer [%s] — no action taken", shortHash, peerID)
 		}
 	}
 }

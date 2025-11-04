@@ -62,6 +62,18 @@ func (q *Queries) GetCountPendingTxs(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getCountPendingTxsByStatus = `-- name: GetCountPendingTxsByStatus :one
+SELECT COUNT(*) FROM pending_transactions
+WHERE status = ANY($1::text[])
+`
+
+func (q *Queries) GetCountPendingTxsByStatus(ctx context.Context, statuses []string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getCountPendingTxsByStatus, pq.Array(statuses))
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getListPendingTxs = `-- name: GetListPendingTxs :many
 SELECT 
   id,
@@ -107,6 +119,78 @@ func (q *Queries) GetListPendingTxs(ctx context.Context, arg GetListPendingTxsPa
 	var items []GetListPendingTxsRow
 	for rows.Next() {
 		var i GetListPendingTxsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TxID,
+			&i.Address,
+			&i.ReceiverAddress,
+			&i.Status,
+			&i.Amount,
+			&i.Fee,
+			&i.Priority,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPendingTxsByStatus = `-- name: GetPendingTxsByStatus :many
+SELECT 
+  id,
+  tx_id,
+  address,
+  receiver_address,
+  status,
+  amount,
+  fee,
+  priority,
+  created_at,
+  updated_at
+FROM pending_transactions
+WHERE status = ANY($3::text[])
+ORDER BY created_at DESC
+OFFSET $1
+LIMIT $2
+`
+
+type GetPendingTxsByStatusParams struct {
+	Offset   int32
+	Limit    int32
+	Statuses []string
+}
+
+type GetPendingTxsByStatusRow struct {
+	ID              uuid.UUID
+	TxID            string
+	Address         string
+	ReceiverAddress string
+	Status          string
+	Amount          string
+	Fee             string
+	Priority        sql.NullInt32
+	CreatedAt       sql.NullTime
+	UpdatedAt       sql.NullTime
+}
+
+func (q *Queries) GetPendingTxsByStatus(ctx context.Context, arg GetPendingTxsByStatusParams) ([]GetPendingTxsByStatusRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPendingTxsByStatus, arg.Offset, arg.Limit, pq.Array(arg.Statuses))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPendingTxsByStatusRow
+	for rows.Next() {
+		var i GetPendingTxsByStatusRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TxID,

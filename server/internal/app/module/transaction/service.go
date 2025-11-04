@@ -183,7 +183,7 @@ func (s *TransactionService) SendTransaction(payload *utils.JWTPayload[types.JWT
 		ctx,
 		dbPendingTx.PendingTxExistsParams{
 			TxID:   hex.EncodeToString(dto.Transaction.ID),
-			Status: []string{string(constants.TxStatusPending), string(constants.TxStatusMining)},
+			Status: []string{string(constants.TxStatusPending)},
 		},
 		nil)
 	if err != nil {
@@ -224,7 +224,6 @@ func (s *TransactionService) SendTransaction(payload *utils.JWTPayload[types.JWT
 		Status:          string(constants.TxStatusPending),
 		Priority:        helpers.Int32ToNullInt32(int32(dto.Priority)),
 		ReceiverAddress: dto.ReceiverAddr,
-		Message:         helpers.StringToNullString(dto.Message),
 		Amount:          fmt.Sprintf("%.8f", dto.Amount),
 		Fee:             fmt.Sprintf("%.8f", dto.Fee),
 	}
@@ -280,7 +279,6 @@ func (s *TransactionService) TransactionPending(payload *utils.JWTPayload[types.
 		Offset:  (int32(page) - 1) * int32(limit),
 		Status: []string{
 			string(constants.TxStatusPending),
-			string(constants.TxStatusMining),
 		},
 	}, nil)
 
@@ -381,13 +379,17 @@ func (s *TransactionService) SearchTransactions(queries *GetTransactionSearchDto
 	return txs, pagination, nil
 }
 
-func (s *TransactionService) GetPendingTransactions(queries *GetTransactionPendingDto) ([]dbPendingTx.GetListPendingTxsRow, *response.PaginationMeta, *apperror.AppError) {
+func (s *TransactionService) GetPendingTransactions(queries *GetTransactionPendingDto) ([]dbPendingTx.GetPendingTxsByStatusRow, *response.PaginationMeta, *apperror.AppError) {
 	ctx := context.Background()
 
 	limit := int32(*queries.Limit)
 	page := int32(*queries.Page)
 
-	txs, err := s.dbRepo.GetPendingTransactions(ctx, dbPendingTx.GetListPendingTxsParams{
+	txs, err := s.dbRepo.GetPendingTxByStatus(ctx, dbPendingTx.GetPendingTxsByStatusParams{
+		Statuses: []string{
+			string(constants.TxStatusFailed),
+			string(constants.TxStatusPending),
+		},
 		Offset: (page - 1) * limit,
 		Limit:  limit,
 	})
@@ -397,7 +399,12 @@ func (s *TransactionService) GetPendingTransactions(queries *GetTransactionPendi
 		return nil, nil, apperror.Internal("Internal server", nil)
 	}
 
-	count, err := s.dbRepo.GetCountPendingTransaction(ctx)
+	count, err := s.dbRepo.GetCountPendingTxsByStatus(
+		ctx,
+		[]string{
+			string(constants.TxStatusPending),
+		},
+	)
 	if err != nil {
 		log.Errorf("Failed to get count pending transactions: %v", err)
 		return nil, nil, apperror.Internal("Internal server", nil)

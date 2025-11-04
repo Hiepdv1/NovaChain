@@ -21,7 +21,6 @@ type NewTransactionParsed struct {
 type SendTransactionDataParsed struct {
 	Fee          float64
 	Amount       float64
-	Message      string
 	ReceiverAddr string
 	Priority     uint
 	Transaction  Transaction

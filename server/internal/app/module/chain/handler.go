@@ -101,3 +101,13 @@ func (h *ChainHandler) GetNetwork(c *fiber.Ctx) error {
 		fiber.StatusOK,
 	)
 }
+
+func (h *ChainHandler) GetMiners(c *fiber.Ctx) error {
+
+	return response.Success(
+		c,
+		nil,
+		"Get list miners",
+		fiber.StatusOK,
+	)
+}

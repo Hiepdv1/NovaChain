@@ -1,4 +1,4 @@
-import { Check, Copy, ExternalLink, Hash, Search, X, Zap } from 'lucide-react';
+import { Check, Copy, Hash, Search, X, Zap } from 'lucide-react';
 import { BlockDetail } from '../../types/block';
 import {
   ChangeEvent,
@@ -206,10 +206,6 @@ const TransactionList = ({ blockData }: TransactionListProps) => {
                       </p>
                     </div>
                   </div>
-                  <button className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg text-xs transition-all hover:scale-105 bg-gradient-primary dark:bg-blue-500/20 text-white">
-                    View Details
-                    <ExternalLink className="w-3 h-3" />
-                  </button>
                 </div>
               </div>
             );

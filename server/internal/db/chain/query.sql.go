@@ -124,6 +124,7 @@ const countTodayTransactions = `-- name: CountTodayTransactions :one
 select COUNT(*) from transactions
 where create_at >= EXTRACT(EPOCH FROM date_trunc('day', now()))
 and create_at < EXTRACT(EPOCH FROM date_trunc('day', now()) + INTERVAL '1 day')
+and fromHash != '' and toHash != ''
 `
 
 func (q *Queries) CountTodayTransactions(ctx context.Context) (int64, error) {

@@ -26,6 +26,7 @@ func (api *API) registerHandlers() {
 		"API.GetBalance":            api.HandleGetBalance,
 		"API.CreateWallet":          api.HandleCreateWallet,
 		"API.GetBlockchain":         api.HandleGetBlockchain,
+		"API.GetCommonBlock":        api.HandleGetCommonBlock,
 		"API.GetBlockByHeight":      api.HandleGetBlockByHeight,
 		"API.GetBlockByHeightRange": api.HandleGetBlocksByHeightRange,
 	}

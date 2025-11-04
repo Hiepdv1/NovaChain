@@ -27,14 +27,6 @@ func NewDashboardService(
 	}
 }
 
-// Updated GetNetworkOverview — paste this function into your DashboardService file (replace the old one).
-// Improvements:
-// - compute average block time per-block (divide by height difference)
-// - avoid div-by-zero and negative timestamps
-// - compute 24h avg difficulty dividing by number of blocks (not intervals)
-// - safe percent-change when historical hashrate is zero/near-zero (show "N/A" or "0.00%")
-// - adaptive hashrate unit formatting (H/s, kH/s, MH/s, GH/s, TH/s)
-
 func (s *DashboardService) GetNetworkOverview() (*NetworkOverview, *apperror.AppError) {
 	ctx := context.Background()
 
@@ -145,7 +137,6 @@ func (s *DashboardService) GetNetworkOverview() (*NetworkOverview, *apperror.App
 			log.Errorf("[Dashboard] ❌ GetCountTodayWorkerMiners failed: %v", err)
 			return nil, apperror.Internal("Something went wrong. Please try again.", err)
 		}
-		log.Warn("[Dashboard] ⚠️ No miner activity found today")
 	}
 
 	return &NetworkOverview{

@@ -156,6 +156,14 @@ func (r *dbTransactionRepository) CountFuzzyTransactionsByBlock(ctx context.Cont
 
 // ---------------- Pending Transactions ----------------
 
+func (r *dbTransactionRepository) GetCountPendingTxsByStatus(ctx context.Context, arg []string) (int64, error) {
+	return r.pendingQueries.GetCountPendingTxsByStatus(ctx, arg)
+}
+
+func (r *dbTransactionRepository) GetPendingTxByStatus(ctx context.Context, arg dbPendingTx.GetPendingTxsByStatusParams) ([]dbPendingTx.GetPendingTxsByStatusRow, error) {
+	return r.pendingQueries.GetPendingTxsByStatus(ctx, arg)
+}
+
 func (r *dbTransactionRepository) FindTxPendingByTxID(ctx context.Context, txID string, tx *sql.Tx) (dbPendingTx.PendingTransaction, error) {
 
 	q := r.pendingQueries

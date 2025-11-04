@@ -57,9 +57,12 @@ const ActivityComponent = () => {
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
               Latest Blocks
             </h3>
-            <button className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium">
+            <Link
+              href={'/blocks'}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+            >
               View All →
-            </button>
+            </Link>
           </div>
           <div className="space-y-3">
             {activity.Blocks.map((item) => {
@@ -111,9 +114,12 @@ const ActivityComponent = () => {
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
               Latest Transactions
             </h3>
-            <button className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium">
+            <Link
+              href={'/txs'}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+            >
               View All →
-            </button>
+            </Link>
           </div>
           <div className="space-y-3">
             {activity.Txs.map((item) => {

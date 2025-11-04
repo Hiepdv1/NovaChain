@@ -7,7 +7,6 @@ interface TransactionPreviewProps {
   data: {
     amount: number;
     fee: number;
-    message: string;
   };
 }
 
@@ -149,17 +148,6 @@ const TransactionPreview = ({
               Ready to Send
             </div>
           </div>
-
-          {data.message && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200/50 dark:border-blue-700/50">
-              <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">
-                Transaction Message:
-              </div>
-              <div className="text-sm text-gray-900 dark:text-white italic break-all whitespace-normal">
-                {data.message}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

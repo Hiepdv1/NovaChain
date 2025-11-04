@@ -4,8 +4,8 @@ import ErrorState from '@/components/errorState';
 import ListBlockLoadingSkeleton from '../components/blocks/Loading-list-block';
 import { useListBlocks } from '../hooks/useBlockQuery';
 import BlockCard from '../components/blocks/BlockCard';
-import BlockListPagination from '../components/blocks/Block-list-pagination';
 import { useCallback, useState } from 'react';
+import Pagination from '@/components/pagination';
 
 const BlockPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,7 +46,7 @@ const BlockPage = () => {
       </div>
 
       {data.meta.total > data.meta.limit && (
-        <BlockListPagination
+        <Pagination
           currentPage={currentPage}
           totalPages={Math.ceil(data.meta.total / data.meta.limit)}
           onPageChange={setCurrentPage}

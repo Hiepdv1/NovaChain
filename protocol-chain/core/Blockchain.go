@@ -277,7 +277,7 @@ func (bc *Blockchain) IsValidCheckpoint(bl *Block) (bool, error) {
 			return false, err
 		}
 
-		checkpointBlock, err := bc.GetBlock(checkpointHash)
+		checkpointBlock, err := bc.GetBlockMainChain(checkpointHash)
 
 		if err != nil || checkpointBlock.Height != checkpointHeight {
 			return false, err
@@ -350,7 +350,7 @@ func (bc *Blockchain) ComputeChain(lashBlockForkChain Block) error {
 				break
 			}
 
-			currentBlock, err = bc.GetBlock(currentBlock.PrevHash)
+			currentBlock, err = bc.GetBlockMainChain(currentBlock.PrevHash)
 
 			if err != nil {
 				return err
@@ -448,13 +448,54 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 
 }
 
+func (bc *Blockchain) GetBlockMainChain(blockHash []byte) (Block, error) {
+
+	var block Block
+
+	err := bc.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(blockHash)
+
+		if err != nil {
+			return err
+		}
+
+		blockData, err := item.ValueCopy(nil)
+
+		if err != nil {
+			return err
+		}
+
+		b := DeserializeBlockData(blockData)
+
+		block = *b
+
+		return nil
+	})
+
+	if err != nil {
+		return Block{}, err
+	}
+
+	hash, err := bc.GetBlockHashByHeight(block.Height)
+	if err != nil {
+		return Block{}, err
+	}
+
+	if !bytes.Equal(hash, blockHash) {
+		return Block{}, fmt.Errorf("Block not found.")
+	}
+
+	return block, nil
+
+}
+
 func (bc *Blockchain) GetBlockByHeight(height int64) (*Block, error) {
 	hash, err := bc.GetBlockHashByHeight(height)
 	if err != nil {
 		return nil, err
 	}
 
-	block, err := bc.GetBlock(hash)
+	block, err := bc.GetBlockMainChain(hash)
 	if err != nil {
 		return nil, err
 	}

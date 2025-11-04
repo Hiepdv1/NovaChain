@@ -7,7 +7,7 @@ interface BlockListPagination {
   onPageChange: (page: number) => void;
 }
 
-const BlockListPagination = ({
+const Pagination = ({
   currentPage,
   totalPages,
   onPageChange,
@@ -63,4 +63,4 @@ const BlockListPagination = ({
   );
 };
 
-export default memo(BlockListPagination);
+export default memo(Pagination);

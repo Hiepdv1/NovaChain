@@ -273,7 +273,8 @@ WHERE fromhash != '' AND tohash != '';
 -- name: CountTodayTransactions :one
 select COUNT(*) from transactions
 where create_at >= EXTRACT(EPOCH FROM date_trunc('day', now()))
-and create_at < EXTRACT(EPOCH FROM date_trunc('day', now()) + INTERVAL '1 day');
+and create_at < EXTRACT(EPOCH FROM date_trunc('day', now()) + INTERVAL '1 day')
+and fromHash != '' and toHash != '';
 
 -- name: GetListFullTransaction :many
 SELECT tx.*, i.id as inID, i.input_tx_id, i.out_index, i.sig, i.pub_key, o.index, o.value, o.pub_key_hash
@@ -338,3 +339,33 @@ WHERE i.out_index = -1
   AND o.pub_key_hash IS NOT NULL
   AND b.timestamp >= EXTRACT(EPOCH FROM date_trunc('day', now()))
   AND b.timestamp < EXTRACT(EPOCH FROM date_trunc('day', now()) + INTERVAL '1 day');
+
+-- name: GetMiners :many
+WITH miner_stats AS (
+	SELECT 
+		o.pub_key_hash AS miner_pubkey,                 
+		MIN(b.timestamp) AS first_mined_at,             
+	  	MAX(b.timestamp) AS last_mined_at,              
+		COUNT(DISTINCT b.b_id) AS mined_blocks          
+	FROM blocks b
+	JOIN transactions tx ON tx.b_id = b.b_id
+	JOIN tx_inputs i ON i.tx_id = tx.tx_id
+	JOIN tx_outputs o ON o.tx_id = tx.tx_id
+	WHERE i.out_index = -1
+	  AND b.height > 1
+	GROUP BY o.pub_key_hash
+)
+SELECT 
+	miner_pubkey,                                         
+	mined_blocks,                                         
+	first_mined_at,                                       
+	last_mined_at,                                        
+	SUM(mined_blocks) OVER () AS total_blocks_network,    
+	ROUND(
+	    mined_blocks * 100.0 / SUM(mined_blocks) OVER (),
+	    2
+  	) AS network_share_percent                            
+FROM miner_stats
+ORDER BY mined_blocks DESC
+OFFSET $1
+LIMIT $2;

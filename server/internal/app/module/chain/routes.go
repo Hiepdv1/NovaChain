@@ -47,4 +47,8 @@ func (r *ChainRoutes) RegisterPublic(router fiber.Router) {
 	r.chainGroup.Get("/network",
 		r.handler.GetNetwork,
 	)
+
+	r.chainGroup.Get("/miners",
+		r.handler.GetMiners,
+	)
 }

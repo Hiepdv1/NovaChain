@@ -4,7 +4,6 @@ export interface TransactionPayload {
   fee: number;
   amount: number;
   to: string;
-  message: string;
   timestamp: number;
   priority: number;
 }
@@ -72,23 +71,14 @@ export interface ResCreateNewTransaction {
   outputs: TxOutput[];
 }
 
-export interface TransactionData {
-  RawTx: {
-    id: string;
-    inputs: TxInput[];
-    outputs: TxOutput[];
-  };
-  PubKeyHash: string;
-}
-
-export interface TransactionPending extends TransactionData {
+export interface TransactionPending {
   ID: string;
   TxID: string;
   Address: string;
   ReceiverAddress: string;
   Amount: string;
   Fee: string;
-  Status: 'pending' | 'mining';
+  Status: 'pending' | 'failed';
   Priority: {
     Int32: number;
     Valid: boolean;

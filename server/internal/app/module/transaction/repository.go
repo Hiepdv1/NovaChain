@@ -36,6 +36,8 @@ type DbTransactionRepository interface {
 	CountFuzzyTransactionsByBlock(ctx context.Context, arg dbchain.CountFuzzyTransactionsByBlockParams) (int64, error)
 
 	// ---------------- Pending Transactions ----------------
+	GetCountPendingTxsByStatus(ctx context.Context, arg []string) (int64, error)
+	GetPendingTxByStatus(ctx context.Context, arg dbPendingTx.GetPendingTxsByStatusParams) ([]dbPendingTx.GetPendingTxsByStatusRow, error)
 	CountPendingTxs(ctx context.Context, tx *sql.Tx) (int64, error)
 	CountTodayPendingTxs(ctx context.Context, tx *sql.Tx) (int64, error)
 	InsertPendingTransaction(ctx context.Context, args dbPendingTx.InsertPendingTransactionParams, tx *sql.Tx) (dbPendingTx.PendingTransaction, error)
