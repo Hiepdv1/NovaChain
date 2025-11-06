@@ -1,9 +1,9 @@
 'use client';
 
 import useWalletContext from '@/components/providers/wallet-provider';
-import EnergyOrb from '@/features/wallet/components/energy-orb';
-import Floating from '@/features/wallet/components/floating';
-import Particle from '@/features/wallet/components/particle';
+import EnergyOrb from '@/features/wallet/components/connect/energy-orb';
+import Floating from '@/features/wallet/components/connect/floating';
+import Particle from '@/features/wallet/components/connect/particle';
 import { useRouter } from 'next/navigation';
 import { Fragment, useEffect } from 'react';
 

@@ -1,13 +1,13 @@
 'use client';
 
 import { Fragment, memo, MouseEvent, useCallback, useState } from 'react';
-import { ModalName } from '../pages/page';
+import { ModalName } from '../../pages/page';
 import Button from '@/components/button';
 import CreatePassword from './create-password';
 import { toast } from '@/components/globalToaster';
 import { useRouter } from 'next/navigation';
 
-import { useWalletConnect } from '../hook/useWalletMutation';
+import { useWalletConnect } from '../../hook/useWalletMutation';
 import { v4 as uuid } from 'uuid';
 import { CreateWallet, GetAddress } from '@/lib/db/wallet.store';
 import { AddWalletToStore, DelWalletByWalletKey } from '@/lib/db/wallet.index';
@@ -16,7 +16,7 @@ import {
   SignPayload,
 } from '@/lib/crypto/wallet.crypto';
 import NoticeBox from './notice-box';
-import { WalletSignaturePayload } from '../types/wallet';
+import { WalletSignaturePayload } from '../../types/wallet';
 import useWalletContext from '@/components/providers/wallet-provider';
 
 interface CreateWallet {

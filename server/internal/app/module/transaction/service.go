@@ -405,6 +405,7 @@ func (s *TransactionService) GetPendingTransactions(queries *GetTransactionPendi
 			string(constants.TxStatusPending),
 		},
 	)
+
 	if err != nil {
 		log.Errorf("Failed to get count pending transactions: %v", err)
 		return nil, nil, apperror.Internal("Internal server", nil)
@@ -413,6 +414,74 @@ func (s *TransactionService) GetPendingTransactions(queries *GetTransactionPendi
 	pagination := helpers.BuildPaginationMeta(
 		int64(limit),
 		int64(page),
+		count,
+		nil,
+	)
+
+	return txs, pagination, nil
+}
+
+func (s *TransactionService) GetTxSummaryByPubKeyHash(
+	auth *utils.JWTPayload[types.JWTWalletAuthPayload],
+) (*dbchain.GetTxSummaryByPubKeyHashRow, *apperror.AppError) {
+	ctx := context.Background()
+	pubkeybytes, err := hex.DecodeString(auth.Data.Pubkey)
+	if err != nil {
+		return nil, apperror.Internal("Something went wrong, please try again.", nil)
+	}
+
+	pub_key_hash := utils.PublicKeyHash(pubkeybytes)
+
+	summary, err := s.dbRepo.GetTxSummaryByPubkeyHash(ctx, hex.EncodeToString(pub_key_hash))
+	if err != nil {
+		log.Errorf("Failed to get tx summary by pub_key_hash: %v", err)
+		return nil, apperror.Internal("Something went wrong, please try again.", nil)
+	}
+
+	return &summary, nil
+}
+
+func (s *TransactionService) GetRecentTransaction(
+	auth *utils.JWTPayload[types.JWTWalletAuthPayload],
+	queries *dto.PaginationQuery,
+) ([]dbchain.GetRecentTransactionRow, *response.PaginationMeta, *apperror.AppError) {
+	ctx := context.Background()
+
+	pubkeybytes, err := hex.DecodeString(auth.Data.Pubkey)
+	if err != nil {
+		return nil, nil, apperror.Internal("Something went wrong, please try again.", nil)
+	}
+	pub_key_hash := hex.EncodeToString(utils.PublicKeyHash(pubkeybytes))
+
+	limit := int32(*queries.Limit)
+	offset := int32(*queries.Page-1) * limit
+
+	txs, err := s.dbRepo.GetRecentTransaction(ctx, dbchain.GetRecentTransactionParams{
+		Offset:     offset,
+		Limit:      limit,
+		PubKeyHash: pub_key_hash,
+	})
+
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			log.Errorf("Failed to get recent transaction: %v", err)
+			return nil, nil, apperror.Internal("Something went wrong, please try again.", nil)
+
+		}
+
+		txs = make([]dbchain.GetRecentTransactionRow, 0)
+	}
+
+	count, err := s.dbRepo.GetCountRecentTransaction(ctx, pub_key_hash)
+	if err != nil {
+		log.Errorf("Failed to get count recent transaction: %v", err)
+		return nil, nil, apperror.Internal("Something went wrong, please try again.", nil)
+
+	}
+
+	pagination := helpers.BuildPaginationMeta(
+		int64(limit),
+		*queries.Page,
 		count,
 		nil,
 	)

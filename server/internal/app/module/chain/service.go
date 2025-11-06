@@ -218,3 +218,37 @@ func (s *ChainService) GetNetwork() (*NetworkInfo, *apperror.AppError) {
 		NetworkHealth: utils.EvaluateNetwork(avgBlockTimes, float64(10*time.Minute)),
 	}, nil
 }
+
+func (s *ChainService) GetMiners(dto *dto.PaginationQuery) ([]dbchain.GetMinersRow, *response.PaginationMeta, *apperror.AppError) {
+	ctx := context.Background()
+
+	limit := int32(*dto.Limit)
+	offset := int32((*dto.Page - 1)) * limit
+
+	arg := dbchain.GetMinersParams{
+		Offset: offset,
+		Limit:  limit,
+	}
+
+	miners, err := s.dbRepo.GetMiners(ctx, arg)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, apperror.Internal("Something went wrong, please try again!", nil)
+		}
+		miners = make([]dbchain.GetMinersRow, 0)
+	}
+
+	count, err := s.dbRepo.CountMiners(ctx)
+	if err != nil {
+		return nil, nil, apperror.Internal("Something went wrong, please try again!", nil)
+	}
+
+	pagination := helpers.BuildPaginationMeta(
+		int64(limit),
+		*dto.Page,
+		count,
+		nil,
+	)
+
+	return miners, pagination, nil
+}

@@ -235,3 +235,11 @@ func (r *dbChainRepository) DeleteBlockByRangeHeight(ctx context.Context, start,
 
 	return nil
 }
+
+func (r *dbChainRepository) GetMiners(ctx context.Context, arg dbchain.GetMinersParams) ([]dbchain.GetMinersRow, error) {
+	return r.queries.GetMiners(ctx, arg)
+}
+
+func (r *dbChainRepository) CountMiners(ctx context.Context) (int64, error) {
+	return r.queries.CountMiners(ctx)
+}

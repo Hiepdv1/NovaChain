@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ModalName } from '../pages/page';
+import { ModalName } from '../../pages/page';
 import CreatePassword from './create-password';
 import Button from '@/components/button';
 import { toast } from '@/components/globalToaster';
@@ -23,12 +23,12 @@ import {
   SignPayload,
 } from '@/lib/crypto/wallet.crypto';
 
-import { WalletConnectData } from '../types/wallet';
+import { WalletConnectData } from '../../types/wallet';
 import { GetAddress, GetPublicKeyFromPrivateKey } from '@/lib/db/wallet.store';
 import { v4 as uuid } from 'uuid';
 import { useRouter } from 'next/navigation';
 import useWalletContext from '@/components/providers/wallet-provider';
-import { useWalletImport } from '../hook/useWalletMutation';
+import { useWalletImport } from '../../hook/useWalletMutation';
 
 interface ImportWallet {
   onSwitchModal(modalName: ModalName): void;

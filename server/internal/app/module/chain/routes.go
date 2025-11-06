@@ -49,6 +49,7 @@ func (r *ChainRoutes) RegisterPublic(router fiber.Router) {
 	)
 
 	r.chainGroup.Get("/miners",
+		middlewares.ValidateQuery[dto.PaginationQuery](false),
 		r.handler.GetMiners,
 	)
 }

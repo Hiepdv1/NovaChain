@@ -103,10 +103,20 @@ func (h *ChainHandler) GetNetwork(c *fiber.Ctx) error {
 }
 
 func (h *ChainHandler) GetMiners(c *fiber.Ctx) error {
+	dto, appErr := helpers.GetLocalQuery[dto.PaginationQuery](c)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
 
-	return response.Success(
+	miners, pagination, appErr := h.service.GetMiners(dto)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	return response.SuccessList(
 		c,
-		nil,
+		miners,
+		*pagination,
 		"Get list miners",
 		fiber.StatusOK,
 	)

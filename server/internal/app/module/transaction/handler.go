@@ -165,3 +165,47 @@ func (h *TransactionHandler) GetPendingTransactions(c *fiber.Ctx) error {
 		fiber.StatusOK,
 	)
 }
+
+func (h *TransactionHandler) GetTxSummary(c *fiber.Ctx) error {
+	auth, appErr := helpers.GetLocalWallet(c)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	summary, appErr := h.service.GetTxSummaryByPubKeyHash(auth)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	return response.Success(
+		c,
+		summary,
+		"Get transaction summary successfully",
+		fiber.StatusOK,
+	)
+}
+
+func (h *TransactionHandler) GetRecentTransaction(c *fiber.Ctx) error {
+	wallet, appErr := helpers.GetLocalWallet(c)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	queries, appErr := helpers.GetLocalQuery[dto.PaginationQuery](c)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	txs, meta, appErr := h.service.GetRecentTransaction(wallet, queries)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	return response.SuccessList(
+		c,
+		txs,
+		*meta,
+		"Get recent transaction successfully",
+		fiber.StatusOK,
+	)
+}

@@ -1,13 +1,13 @@
 'use client';
 
 import { Fragment, useCallback, useState } from 'react';
-import Welcome from '../components/welcome';
-import CreateWallet from '../components/create-wallet';
-import ImportWallet from '../components/import-wallet';
+import Welcome from '../components/connect/welcome';
+import CreateWallet from '../components/connect/create-wallet';
+import ImportWallet from '../components/connect/import-wallet';
 import LoadingOverlay, {
   LoadingOverlayProps,
   LoadingStep,
-} from '../components/loading-overlay';
+} from '../components/connect/loading-overlay';
 
 export type ModalName = 'Welcome' | 'CreateWallet' | 'ImportWallet';
 

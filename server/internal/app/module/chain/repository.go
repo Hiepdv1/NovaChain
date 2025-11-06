@@ -14,6 +14,8 @@ type RPCChainRepository interface {
 }
 
 type DBChainRepository interface {
+	CountMiners(ctx context.Context) (int64, error)
+	GetMiners(ctx context.Context, arg dbchain.GetMinersParams) ([]dbchain.GetMinersRow, error)
 	DeleteBlockByRangeHeight(ctx context.Context, start, end int64, tx *sql.Tx) error
 	GetBlockLocator(ctx context.Context, tx *sql.Tx) ([][]byte, error)
 	GetRecentBlocksForNetworkInfo(ctx context.Context, limit int32) ([]dbchain.GetRecentBlocksForNetworkInfoRow, error)

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import PulseRing from './pulse-ring';
-import { ModalName } from '../pages/page';
+import { ModalName } from '../../pages/page';
 import Button from '@/components/button';
 
 interface WelcomeProps {

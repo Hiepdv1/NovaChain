@@ -135,13 +135,3 @@ func (h *WalletHandler) GetMe(c *fiber.Ctx) error {
 		fiber.StatusOK,
 	)
 }
-
-func (h *WalletHandler) GetBalance(c *fiber.Ctx) error {
-
-	return response.Success(
-		c,
-		0,
-		"Get balance successfully",
-		fiber.StatusOK,
-	)
-}

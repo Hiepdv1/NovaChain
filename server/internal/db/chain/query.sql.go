@@ -120,6 +120,37 @@ func (q *Queries) CountFuzzyTransactionsByBlock(ctx context.Context, arg CountFu
 	return total_count, err
 }
 
+const countMiners = `-- name: CountMiners :one
+SELECT 
+	COUNT(DISTINCT o.pub_key_hash)              
+FROM blocks b
+JOIN transactions tx ON tx.b_id = b.b_id
+JOIN tx_inputs i ON i.tx_id = tx.tx_id
+JOIN tx_outputs o ON o.tx_id = tx.tx_id
+WHERE i.out_index = -1
+  AND b.height > 1
+`
+
+func (q *Queries) CountMiners(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMiners)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countRecentTransaction = `-- name: CountRecentTransaction :one
+SELECT COUNT(*) FROM transactions
+WHERE fromhash = $1::TEXT OR
+tohash = $1::TEXT
+`
+
+func (q *Queries) CountRecentTransaction(ctx context.Context, pubKeyHash string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRecentTransaction, pubKeyHash)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTodayTransactions = `-- name: CountTodayTransactions :one
 select COUNT(*) from transactions
 where create_at >= EXTRACT(EPOCH FROM date_trunc('day', now()))
@@ -1032,6 +1063,81 @@ func (q *Queries) GetListTxOutputByTxId(ctx context.Context, txID string) ([]TxO
 	return items, nil
 }
 
+const getMiners = `-- name: GetMiners :many
+WITH miner_stats AS (
+	SELECT 
+		o.pub_key_hash AS miner_pubkey,                 
+		MIN(b.timestamp) AS first_mined_at,             
+	  	MAX(b.timestamp) AS last_mined_at,              
+		COUNT(DISTINCT b.b_id) AS mined_blocks          
+	FROM blocks b
+	JOIN transactions tx ON tx.b_id = b.b_id
+	JOIN tx_inputs i ON i.tx_id = tx.tx_id
+	JOIN tx_outputs o ON o.tx_id = tx.tx_id
+	WHERE i.out_index = -1
+	  AND b.height > 1
+	GROUP BY o.pub_key_hash
+)
+SELECT 
+	miner_pubkey,                                         
+	mined_blocks,                                         
+	first_mined_at,                                       
+	last_mined_at,                                        
+	SUM(mined_blocks) OVER () AS total_blocks_network,    
+	ROUND(
+	    mined_blocks * 100.0 / SUM(mined_blocks) OVER (),
+	    2
+  	) AS network_share_percent                            
+FROM miner_stats
+ORDER BY mined_blocks DESC
+OFFSET $1
+LIMIT $2
+`
+
+type GetMinersParams struct {
+	Offset int32
+	Limit  int32
+}
+
+type GetMinersRow struct {
+	MinerPubkey         string
+	MinedBlocks         int64
+	FirstMinedAt        interface{}
+	LastMinedAt         interface{}
+	TotalBlocksNetwork  int64
+	NetworkSharePercent string
+}
+
+func (q *Queries) GetMiners(ctx context.Context, arg GetMinersParams) ([]GetMinersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMiners, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMinersRow
+	for rows.Next() {
+		var i GetMinersRow
+		if err := rows.Scan(
+			&i.MinerPubkey,
+			&i.MinedBlocks,
+			&i.FirstMinedAt,
+			&i.LastMinedAt,
+			&i.TotalBlocksNetwork,
+			&i.NetworkSharePercent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRecentBlocksForNetworkInfo = `-- name: GetRecentBlocksForNetworkInfo :many
 SELECT height, nbits, timestamp
 FROM blocks
@@ -1055,6 +1161,94 @@ func (q *Queries) GetRecentBlocksForNetworkInfo(ctx context.Context, limit int32
 	for rows.Next() {
 		var i GetRecentBlocksForNetworkInfoRow
 		if err := rows.Scan(&i.Height, &i.Nbits, &i.Timestamp); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRecentTransaction = `-- name: GetRecentTransaction :many
+WITH recent AS (
+  SELECT 
+    'sent'     AS type,
+    tx.id,
+    tx.tx_id,
+    tx.b_id,
+    tx.create_at,
+    tx.amount,
+    tx.fee,
+    tx.fromhash,
+    tx.tohash
+  FROM transactions tx
+  WHERE tx.fromhash = $3::TEXT
+
+  UNION ALL
+
+  SELECT 
+    'received' AS type,
+    tx.id,
+    tx.tx_id,
+    tx.b_id,
+    tx.create_at,
+    tx.amount,
+    tx.fee,
+    tx.fromhash,
+    tx.tohash  
+  FROM transactions tx
+  WHERE tx.tohash = $3::TEXT
+)
+SELECT type, id, tx_id, b_id, create_at, amount, fee, fromhash, tohash
+FROM recent
+ORDER BY create_at DESC
+OFFSET $1
+LIMIT $2
+`
+
+type GetRecentTransactionParams struct {
+	Offset     int32
+	Limit      int32
+	PubKeyHash string
+}
+
+type GetRecentTransactionRow struct {
+	Type     string
+	ID       uuid.UUID
+	TxID     string
+	BID      string
+	CreateAt int64
+	Amount   sql.NullString
+	Fee      sql.NullString
+	Fromhash sql.NullString
+	Tohash   sql.NullString
+}
+
+func (q *Queries) GetRecentTransaction(ctx context.Context, arg GetRecentTransactionParams) ([]GetRecentTransactionRow, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentTransaction, arg.Offset, arg.Limit, arg.PubKeyHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentTransactionRow
+	for rows.Next() {
+		var i GetRecentTransactionRow
+		if err := rows.Scan(
+			&i.Type,
+			&i.ID,
+			&i.TxID,
+			&i.BID,
+			&i.CreateAt,
+			&i.Amount,
+			&i.Fee,
+			&i.Fromhash,
+			&i.Tohash,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1144,6 +1338,64 @@ func (q *Queries) GetTxOutputByTxIDAndIndex(ctx context.Context, arg GetTxOutput
 		&i.Value,
 		&i.BID,
 		&i.PubKeyHash,
+	)
+	return i, err
+}
+
+const getTxSummaryByPubKeyHash = `-- name: GetTxSummaryByPubKeyHash :one
+WITH all_activity AS (
+    SELECT 
+        fromhash     AS pub_key_hash,
+        COUNT(*)     AS total_tx_sent,
+        SUM(amount::numeric)  AS total_sent,
+        0::numeric            AS total_received
+    FROM transactions
+    WHERE fromhash = $1::TEXT
+    GROUP BY fromhash
+
+    UNION ALL
+
+    SELECT 
+        tohash       AS pub_key_hash,
+        0                 AS total_tx_sent,
+        0::numeric        AS total_sent,
+        SUM(amount::numeric) AS total_received
+    FROM transactions
+    WHERE tohash = $1::TEXT
+    GROUP BY tohash
+),
+aggregated AS (
+    SELECT
+        pub_key_hash,
+        SUM(total_tx_sent)     AS total_tx,
+        SUM(total_sent)        AS total_sent,
+        SUM(total_received)    AS total_received
+    FROM all_activity
+    GROUP BY pub_key_hash
+)
+SELECT 
+    pub_key_hash,
+    COALESCE(total_tx, 0)             AS total_tx,
+    COALESCE(total_sent, 0)::TEXT   AS total_sent,
+    COALESCE(total_received, 0)::TEXT AS total_received
+FROM aggregated
+`
+
+type GetTxSummaryByPubKeyHashRow struct {
+	PubKeyHash    sql.NullString
+	TotalTx       int64
+	TotalSent     string
+	TotalReceived string
+}
+
+func (q *Queries) GetTxSummaryByPubKeyHash(ctx context.Context, pubKeyHash string) (GetTxSummaryByPubKeyHashRow, error) {
+	row := q.db.QueryRowContext(ctx, getTxSummaryByPubKeyHash, pubKeyHash)
+	var i GetTxSummaryByPubKeyHashRow
+	err := row.Scan(
+		&i.PubKeyHash,
+		&i.TotalTx,
+		&i.TotalSent,
+		&i.TotalReceived,
 	)
 	return i, err
 }

@@ -154,6 +154,18 @@ func (r *dbTransactionRepository) CountFuzzyTransactionsByBlock(ctx context.Cont
 	return r.queries.CountFuzzyTransactionsByBlock(ctx, arg)
 }
 
+func (r *dbTransactionRepository) GetTxSummaryByPubkeyHash(ctx context.Context, pub_key_hash string) (dbchain.GetTxSummaryByPubKeyHashRow, error) {
+	return r.queries.GetTxSummaryByPubKeyHash(ctx, pub_key_hash)
+}
+
+func (r *dbTransactionRepository) GetRecentTransaction(ctx context.Context, arg dbchain.GetRecentTransactionParams) ([]dbchain.GetRecentTransactionRow, error) {
+	return r.queries.GetRecentTransaction(ctx, arg)
+}
+
+func (r *dbTransactionRepository) GetCountRecentTransaction(ctx context.Context, pub_key_hash string) (int64, error) {
+	return r.queries.CountRecentTransaction(ctx, pub_key_hash)
+}
+
 // ---------------- Pending Transactions ----------------
 
 func (r *dbTransactionRepository) GetCountPendingTxsByStatus(ctx context.Context, arg []string) (int64, error) {

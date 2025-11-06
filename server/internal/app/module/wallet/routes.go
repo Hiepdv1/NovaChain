@@ -37,6 +37,7 @@ func (r *WalletRoutes) RegisterPublic(router fiber.Router) {
 	publicGroup.Post("/new",
 		r.handler.CreateWallet,
 	)
+
 	publicGroup.Post("/import",
 		r.handler.ImportWallet,
 	)

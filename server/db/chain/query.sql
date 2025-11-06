@@ -222,6 +222,47 @@ where b_id = $1;
 DELETE FROM blocks
 WHERE height = $1;
 
+-- name: GetMiners :many
+WITH miner_stats AS (
+	SELECT 
+		o.pub_key_hash AS miner_pubkey,                 
+		MIN(b.timestamp) AS first_mined_at,             
+	  	MAX(b.timestamp) AS last_mined_at,              
+		COUNT(DISTINCT b.b_id) AS mined_blocks          
+	FROM blocks b
+	JOIN transactions tx ON tx.b_id = b.b_id
+	JOIN tx_inputs i ON i.tx_id = tx.tx_id
+	JOIN tx_outputs o ON o.tx_id = tx.tx_id
+	WHERE i.out_index = -1
+	  AND b.height > 1
+	GROUP BY o.pub_key_hash
+)
+SELECT 
+	miner_pubkey,                                         
+	mined_blocks,                                         
+	first_mined_at,                                       
+	last_mined_at,                                        
+	SUM(mined_blocks) OVER () AS total_blocks_network,    
+	ROUND(
+	    mined_blocks * 100.0 / SUM(mined_blocks) OVER (),
+	    2
+  	) AS network_share_percent                            
+FROM miner_stats
+ORDER BY mined_blocks DESC
+OFFSET $1
+LIMIT $2;
+
+-- name: CountMiners :one
+SELECT 
+	COUNT(DISTINCT o.pub_key_hash)              
+FROM blocks b
+JOIN transactions tx ON tx.b_id = b.b_id
+JOIN tx_inputs i ON i.tx_id = tx.tx_id
+JOIN tx_outputs o ON o.tx_id = tx.tx_id
+WHERE i.out_index = -1
+  AND b.height > 1;
+
+
 
 -- name: CreateTransaction :one
 insert into transactions (tx_id, b_id, fromHash, toHash, amount, fee, create_at)
@@ -340,32 +381,82 @@ WHERE i.out_index = -1
   AND b.timestamp >= EXTRACT(EPOCH FROM date_trunc('day', now()))
   AND b.timestamp < EXTRACT(EPOCH FROM date_trunc('day', now()) + INTERVAL '1 day');
 
--- name: GetMiners :many
-WITH miner_stats AS (
-	SELECT 
-		o.pub_key_hash AS miner_pubkey,                 
-		MIN(b.timestamp) AS first_mined_at,             
-	  	MAX(b.timestamp) AS last_mined_at,              
-		COUNT(DISTINCT b.b_id) AS mined_blocks          
-	FROM blocks b
-	JOIN transactions tx ON tx.b_id = b.b_id
-	JOIN tx_inputs i ON i.tx_id = tx.tx_id
-	JOIN tx_outputs o ON o.tx_id = tx.tx_id
-	WHERE i.out_index = -1
-	  AND b.height > 1
-	GROUP BY o.pub_key_hash
+-- name: GetTxSummaryByPubKeyHash :one
+WITH all_activity AS (
+    SELECT 
+        fromhash     AS pub_key_hash,
+        COUNT(*)     AS total_tx_sent,
+        SUM(amount::numeric)  AS total_sent,
+        0::numeric            AS total_received
+    FROM transactions
+    WHERE fromhash = sqlc.arg('pub_key_hash')::TEXT
+    GROUP BY fromhash
+
+    UNION ALL
+
+    SELECT 
+        tohash       AS pub_key_hash,
+        0                 AS total_tx_sent,
+        0::numeric        AS total_sent,
+        SUM(amount::numeric) AS total_received
+    FROM transactions
+    WHERE tohash = sqlc.arg('pub_key_hash')::TEXT
+    GROUP BY tohash
+),
+aggregated AS (
+    SELECT
+        pub_key_hash,
+        SUM(total_tx_sent)     AS total_tx,
+        SUM(total_sent)        AS total_sent,
+        SUM(total_received)    AS total_received
+    FROM all_activity
+    GROUP BY pub_key_hash
 )
 SELECT 
-	miner_pubkey,                                         
-	mined_blocks,                                         
-	first_mined_at,                                       
-	last_mined_at,                                        
-	SUM(mined_blocks) OVER () AS total_blocks_network,    
-	ROUND(
-	    mined_blocks * 100.0 / SUM(mined_blocks) OVER (),
-	    2
-  	) AS network_share_percent                            
-FROM miner_stats
-ORDER BY mined_blocks DESC
+    pub_key_hash,
+    COALESCE(total_tx, 0)             AS total_tx,
+    COALESCE(total_sent, 0)::TEXT   AS total_sent,
+    COALESCE(total_received, 0)::TEXT AS total_received
+FROM aggregated;
+
+-- name: GetRecentTransaction :many
+WITH recent AS (
+  SELECT 
+    'sent'     AS type,
+    tx.id,
+    tx.tx_id,
+    tx.b_id,
+    tx.create_at,
+    tx.amount,
+    tx.fee,
+    tx.fromhash,
+    tx.tohash
+  FROM transactions tx
+  WHERE tx.fromhash = sqlc.arg('pub_key_hash')::TEXT
+
+  UNION ALL
+
+  SELECT 
+    'received' AS type,
+    tx.id,
+    tx.tx_id,
+    tx.b_id,
+    tx.create_at,
+    tx.amount,
+    tx.fee,
+    tx.fromhash,
+    tx.tohash  
+  FROM transactions tx
+  WHERE tx.tohash = sqlc.arg('pub_key_hash')::TEXT
+)
+SELECT type, id, tx_id, b_id, create_at, amount, fee, fromhash, tohash
+FROM recent
+ORDER BY create_at DESC
 OFFSET $1
 LIMIT $2;
+
+
+-- name: CountRecentTransaction :one
+SELECT COUNT(*) FROM transactions
+WHERE fromhash = sqlc.arg('pub_key_hash')::TEXT OR
+tohash = sqlc.arg('pub_key_hash')::TEXT;

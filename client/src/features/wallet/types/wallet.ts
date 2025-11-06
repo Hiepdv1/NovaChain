@@ -1,4 +1,5 @@
 import { NullTime } from '@/shared/types/api';
+import { NullableString } from '@/shared/types/flag';
 
 export interface WalletConnectData {
   timestamp: number;
@@ -33,4 +34,23 @@ export interface WalletSignaturePayload {
   publickey: string;
   timestamp: number;
   address: string;
+}
+
+export interface TxSumary {
+  PubKeyHash: string;
+  TotalTx: number;
+  TotalSent: string;
+  TotalReceived: string;
+}
+
+export interface RecentTransaction {
+  BID: string;
+  Type: 'sent' | 'received';
+  ID: string;
+  TxID: string;
+  CreateAt: number;
+  Amount: NullableString;
+  Fee: NullableString;
+  Fromhash: NullableString;
+  Tohash: NullableString;
 }

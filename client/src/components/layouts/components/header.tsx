@@ -39,6 +39,7 @@ interface MenuItem {
   icon: React.ElementType;
   path: string;
 }
+
 const MenuList: MenuItem[] = [
   {
     id: 1,
@@ -270,9 +271,9 @@ const Header = () => {
                         </div>
                         <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
                           <span>
-                            {(walletQuery?.data?.Balance &&
+                            {(walletQuery?.data?.data.Balance &&
                               parseFloat(
-                                walletQuery.data.Balance,
+                                walletQuery.data.data.Balance,
                               ).toString()) ||
                               'N/A'}{' '}
                             CCC
@@ -314,9 +315,9 @@ const Header = () => {
                             Balance
                           </div>
                           <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                            {(walletQuery?.data?.Balance &&
+                            {(walletQuery?.data?.data.Balance &&
                               parseFloat(
-                                walletQuery.data.Balance,
+                                walletQuery.data.data.Balance,
                               ).toString()) ||
                               'N/A'}
                           </div>

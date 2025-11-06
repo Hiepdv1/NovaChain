@@ -68,4 +68,13 @@ func (r *TransactionRoutes) RegisterPrivate(router fiber.Router) {
 		r.handler.SendTransaction,
 	)
 
+	privateGroup.Get("/summary",
+		r.handler.GetTxSummary,
+	)
+
+	privateGroup.Get("/recent",
+		middlewares.ValidateQuery[dto.PaginationQuery](false),
+		r.handler.GetRecentTransaction,
+	)
+
 }
