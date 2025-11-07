@@ -4,10 +4,11 @@ import { memo, useCallback, useState } from 'react';
 import BalanceCardSkeleton from './loading/balance-loader';
 import ErrorState from '@/components/errorState';
 import { useWalletQuery } from '../../hook/useWalletQuery';
-import { ArrowDownLeft, Eye, EyeOff, Send } from 'lucide-react';
+import { Eye, EyeOff, Send } from 'lucide-react';
 import { FormatFloat } from '@/shared/utils/format';
 import CopyButton from '@/components/button/copyButton';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const BalanceCard = () => {
   const [showBalance, setShowBalance] = useState(true);
@@ -44,7 +45,7 @@ const BalanceCard = () => {
             </span>
             <button
               onClick={() => setShowBalance(!showBalance)}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+              className="cursor-pointer p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
             >
               {showBalance ? (
                 <Eye className="w-4 h-4 text-gray-400" />
@@ -72,16 +73,12 @@ const BalanceCard = () => {
           )}
         </div>
 
-        <div className="flex gap-3">
+        <Link href="/txs/send" className="flex cursor-pointer gap-3">
           <button className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 sm:px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg">
             <Send className="w-5 h-5" />
             <span>Send</span>
           </button>
-          <button className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 sm:px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg">
-            <ArrowDownLeft className="w-5 h-5" />
-            <span>Receive</span>
-          </button>
-        </div>
+        </Link>
       </div>
 
       <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">

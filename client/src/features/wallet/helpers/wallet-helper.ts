@@ -26,7 +26,6 @@ export const buildTransactionSignaturePayload = (
   fee: number,
   amount: number,
   timestamp: number,
-  message: string,
   priority: number,
 ): CreateNewTXPayload => {
   return {
@@ -35,7 +34,6 @@ export const buildTransactionSignaturePayload = (
       amount,
       to,
       timestamp: timestamp + 3 * 60,
-      message,
       priority,
     },
     sig: '',
@@ -49,7 +47,6 @@ export const buildSendTransactionSignaturePayload = (
     data: {
       amount: payload.amount,
       fee: payload.fee,
-      message: payload.message,
       receiverAddress: payload.receiverAddress,
       priority: payload.priority,
       transaction: payload.transaction,

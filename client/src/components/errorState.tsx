@@ -2,6 +2,7 @@
 
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { memo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface ErrorStateProps {
   title?: string;
@@ -21,12 +22,16 @@ const ErrorState = ({
   gradient = 'from-red-500 to-orange-500',
 }: ErrorStateProps) => {
   const [isRetrying, setIsRetrying] = useState(false);
+  const router = useRouter();
 
   const handleRetry = async () => {
-    if (!onRetry) return;
     setIsRetrying(true);
     try {
-      await onRetry();
+      if (onRetry) {
+        await onRetry();
+      } else {
+        router.refresh();
+      }
     } finally {
       setTimeout(() => setIsRetrying(false), 400);
     }
@@ -48,18 +53,14 @@ const ErrorState = ({
       <p className="text-gray-600 dark:text-gray-400 text-center max-w-md leading-relaxed mb-6">
         {message}
       </p>
-      {onRetry && (
-        <button
-          onClick={handleRetry}
-          disabled={isRetrying}
-          className="flex items-center gap-2 px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition disabled:opacity-50"
-        >
-          <RefreshCw
-            className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`}
-          />
-          {isRetrying ? 'Retrying...' : retryText}
-        </button>
-      )}
+      <button
+        onClick={handleRetry}
+        disabled={isRetrying}
+        className="flex items-center gap-2 px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition disabled:opacity-50"
+      >
+        <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+        {isRetrying ? 'Retrying...' : retryText}
+      </button>
     </div>
   );
 };

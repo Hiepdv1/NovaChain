@@ -166,6 +166,10 @@ func (r *dbTransactionRepository) GetCountRecentTransaction(ctx context.Context,
 	return r.queries.CountRecentTransaction(ctx, pub_key_hash)
 }
 
+func (r *dbTransactionRepository) GetDetailTransaction(ctx context.Context, tx_hash string) (dbchain.GetDetailTxRow, error) {
+	return r.queries.GetDetailTx(ctx, tx_hash)
+}
+
 // ---------------- Pending Transactions ----------------
 
 func (r *dbTransactionRepository) GetCountPendingTxsByStatus(ctx context.Context, arg []string) (int64, error) {

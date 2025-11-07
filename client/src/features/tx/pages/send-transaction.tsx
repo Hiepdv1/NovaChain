@@ -175,7 +175,7 @@ const SendTransactionPage = () => {
     const value = inputRecipient.value;
 
     if (ValidateAddress(value)) {
-      if (value.trim() === wallet.data.Address.String.trim()) {
+      if (value.trim() === wallet.data.data.Address.String.trim()) {
         setValidate((prev) => {
           return {
             ...prev,
@@ -290,11 +290,11 @@ const SendTransactionPage = () => {
             value: 0,
           },
         }));
-      } else if (amount > parseFloat(wallet.data.Balance)) {
+      } else if (amount > parseFloat(wallet.data.data.Balance)) {
         setValidate((prev) => ({
           ...prev,
           amount: {
-            message: `Insufficient balance. Maximum available: ${wallet.data.Balance} CCC`,
+            message: `Insufficient balance. Maximum available: ${wallet.data.data.Balance} CCC`,
             valid: false,
             value: 0,
           },
@@ -336,7 +336,7 @@ const SendTransactionPage = () => {
         priority: payload.data.priority,
         to: payload.data.to,
         from: w.address,
-        balance: parseFloat(wallet?.data?.Balance || '0'),
+        balance: parseFloat(wallet?.data?.data.Balance || '0'),
         transaction: data,
         privateKey: privKey,
       },
@@ -359,7 +359,7 @@ const SendTransactionPage = () => {
 
     if (!fee) return;
 
-    if (fee.fee + Number(data.amount) > Number(wallet.data.Balance)) {
+    if (fee.fee + Number(data.amount) > Number(wallet.data.data.Balance)) {
       toast.warning('You dont have enough amount.');
       return;
     }
@@ -384,7 +384,7 @@ const SendTransactionPage = () => {
     if (!amountInput || !wallet?.data) return;
 
     amountInput.value = (
-      parseFloat(wallet.data.Balance) *
+      parseFloat(wallet.data.data.Balance) *
       (percentage / 100)
     ).toString();
 
@@ -393,7 +393,7 @@ const SendTransactionPage = () => {
     amountInput.dispatchEvent(event);
     toast.info(
       'Amount Set',
-      `Set to ${percentage}% of balance (${wallet.data.Balance} CCC)`,
+      `Set to ${percentage}% of balance (${wallet.data.data.Balance} CCC)`,
     );
   };
 
@@ -554,7 +554,7 @@ const SendTransactionPage = () => {
                     name="fromAddr"
                     id="fromAddr"
                     disabled
-                    value={wallet?.data?.Address.String}
+                    value={wallet?.data?.data.Address.String}
                   />
 
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -576,7 +576,7 @@ const SendTransactionPage = () => {
                   <span className="text-gray-500 dark:text-gray-400">
                     Balance:
                     <span className="ml-1 font-medium text-gray-900 dark:text-white">
-                      {wallet?.data?.Balance} CCC
+                      {wallet?.data?.data.Balance} CCC
                     </span>
                   </span>
                 </div>
@@ -827,7 +827,7 @@ const SendTransactionPage = () => {
                     type="text"
                     onInput={onInputAmount}
                     min={0}
-                    max={wallet?.data?.Balance}
+                    max={wallet?.data?.data.Balance}
                     ref={(el) => void (refs.current.amountInput = el)}
                     placeholder="0.00000000"
                   />
@@ -924,7 +924,7 @@ const SendTransactionPage = () => {
                 : ''
             }
             active={validate.recipientAddr.valid && validate.amount.valid}
-            fromAddr={wallet.data.Address.String.trim()}
+            fromAddr={wallet.data.data.Address.String.trim()}
             data={{
               amount: validate.amount.value,
               fee: currentFee.fee,

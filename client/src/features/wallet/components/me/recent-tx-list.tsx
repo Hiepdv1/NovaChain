@@ -42,8 +42,6 @@ const RecentTransaction = () => {
 
   const recentTransactions = data.data;
 
-  console.log(recentTransactions);
-
   return (
     <div className="p-2">
       {recentTransactions.map((tx) => (

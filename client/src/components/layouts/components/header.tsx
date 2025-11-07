@@ -61,9 +61,9 @@ const MenuList: MenuItem[] = [
   },
   {
     id: 4,
-    title: 'Wallet Settings',
+    title: 'Access Wallet',
     icon: Settings,
-    path: '/settings',
+    path: '/wallet/me',
   },
 ];
 

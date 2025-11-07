@@ -16,7 +16,6 @@ const TransactionDetailModal = ({
   from,
   to,
   amount,
-  message,
   fee,
   transaction,
   privateKey,
@@ -53,7 +52,6 @@ const TransactionDetailModal = ({
     }
 
     const dataToSign = buildSendTransactionSignaturePayload({
-      message,
       priority,
       transaction: newTx,
       receiverAddress: to,
@@ -587,17 +585,6 @@ const TransactionDetailModal = ({
               </div>
             </div>
           </div>
-
-          {message && (
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200/50 dark:border-blue-700/50">
-              <div className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                Transaction Message:
-              </div>
-              <div className="text-sm text-gray-700 dark:text-gray-300 italic bg-white/50 dark:bg-white/10 p-3 rounded-lg">
-                {message}
-              </div>
-            </div>
-          )}
 
           <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200/50 dark:border-yellow-700/50">
             <div className="flex items-start space-x-3">

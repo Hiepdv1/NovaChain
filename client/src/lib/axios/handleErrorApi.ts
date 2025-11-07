@@ -20,3 +20,39 @@ export function handleApiError(error: unknown): BaseErrorResponse {
     statusCode: 500,
   };
 }
+
+export class ApiError extends Error implements BaseErrorResponse {
+  code?: string | number;
+  statusCode?: number;
+  errors?: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    statusCode?: number,
+    code?: string | number,
+    errors?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.statusCode = statusCode;
+    this.code = code;
+    this.errors = errors;
+
+    Object.setPrototypeOf(this, ApiError.prototype);
+  }
+}
+
+export function throwApiError(error: unknown): never {
+  if (error instanceof ApiError) throw error;
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const e = error as BaseErrorResponse;
+    throw new ApiError(e.message, e.statusCode, e.code, e.errors);
+  }
+
+  if (error instanceof Error) {
+    throw new ApiError(error.message, 500, undefined, undefined);
+  }
+
+  throw new ApiError('Unknown error', 500);
+}

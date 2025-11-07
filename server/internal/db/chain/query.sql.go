@@ -619,6 +619,74 @@ func (q *Queries) GetCountTransaction(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getDetailTx = `-- name: GetDetailTx :one
+WITH last_block AS (
+  SELECT MAX(height) AS last_block FROM blocks
+),
+miner_info AS (
+  SELECT 
+    i.b_id,
+    o.pub_key_hash AS miner
+  FROM tx_inputs i
+  JOIN tx_outputs o ON o.tx_id = i.tx_id
+  WHERE i.out_index = -1
+)
+SELECT 
+  tx.tx_id,
+  b.height,
+  b.b_id,
+  b.timestamp,
+  tx.fromhash,
+  tx.tohash,
+  tx.amount,
+  tx.fee,
+  b.nbits,
+  b.nonce,
+  m.miner,
+  lb.last_block
+FROM transactions tx
+JOIN blocks b ON tx.b_id = b.b_id
+LEFT JOIN miner_info m ON m.b_id = b.b_id
+CROSS JOIN last_block lb
+WHERE tx.tx_id = $1::TEXT
+LIMIT 1
+`
+
+type GetDetailTxRow struct {
+	TxID      string
+	Height    int64
+	BID       string
+	Timestamp int64
+	Fromhash  sql.NullString
+	Tohash    sql.NullString
+	Amount    sql.NullString
+	Fee       sql.NullString
+	Nbits     int64
+	Nonce     int64
+	Miner     sql.NullString
+	LastBlock interface{}
+}
+
+func (q *Queries) GetDetailTx(ctx context.Context, txHash string) (GetDetailTxRow, error) {
+	row := q.db.QueryRowContext(ctx, getDetailTx, txHash)
+	var i GetDetailTxRow
+	err := row.Scan(
+		&i.TxID,
+		&i.Height,
+		&i.BID,
+		&i.Timestamp,
+		&i.Fromhash,
+		&i.Tohash,
+		&i.Amount,
+		&i.Fee,
+		&i.Nbits,
+		&i.Nonce,
+		&i.Miner,
+		&i.LastBlock,
+	)
+	return i, err
+}
+
 const getFullTransactionByBID = `-- name: GetFullTransactionByBID :many
 select id, tx_id, b_id, create_at, amount, fee, fromhash, tohash FROM transactions where b_id = $1
 `

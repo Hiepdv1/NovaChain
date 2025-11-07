@@ -36,16 +36,6 @@ func (h *TransactionHandler) GetListTransaction(c *fiber.Ctx) error {
 	)
 }
 
-func (h *TransactionHandler) GetDetailTransaction(c *fiber.Ctx) error {
-
-	return response.Success(
-		c,
-		nil,
-		"Get detail transaction successfully",
-		fiber.StatusOK,
-	)
-}
-
 func (h *TransactionHandler) CreateNewTransaction(c *fiber.Ctx) error {
 	dto, apperr := helpers.GetLocalBody[*NewTransactionParsed](c)
 
@@ -206,6 +196,25 @@ func (h *TransactionHandler) GetRecentTransaction(c *fiber.Ctx) error {
 		txs,
 		*meta,
 		"Get recent transaction successfully",
+		fiber.StatusOK,
+	)
+}
+
+func (h *TransactionHandler) GetDetailTransaction(c *fiber.Ctx) error {
+	params, appErr := helpers.GetLocalParams[GetTransactionDetailDto](c)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	tx, appErr := h.service.GetDetailTransaction(params)
+	if appErr != nil {
+		return appErr.Response(c)
+	}
+
+	return response.Success(
+		c,
+		tx,
+		"Get detail transaction successfully",
 		fiber.StatusOK,
 	)
 }

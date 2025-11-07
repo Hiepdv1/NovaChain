@@ -37,6 +37,11 @@ func (r *TransactionRoutes) RegisterPublic(router fiber.Router) {
 		r.handler.GetPendingTransactions,
 	)
 
+	publicGroup.Get("/:tx_hash",
+		middlewares.ValidateParams[GetTransactionDetailDto](false),
+		r.handler.GetDetailTransaction,
+	)
+
 	publicGroup.Get("/",
 		middlewares.ValidateQuery[dto.PaginationQuery](false),
 		r.handler.GetListTransaction,

@@ -1,8 +1,9 @@
-import { handleApiError } from '@/lib/axios/handleErrorApi';
+import { handleApiError, throwApiError } from '@/lib/axios/handleErrorApi';
 import {
   CreateNewTXPayload,
   ResCreateNewTransaction,
   SendTransactionPayload,
+  TransactionDetail,
   TransactionItem,
   TransactionPending,
 } from '../types/transaction';
@@ -95,6 +96,17 @@ class TransactionService {
       return res.data;
     } catch (err) {
       throw handleApiError(err);
+    }
+  }
+
+  public async GetDetailTransaction(tx_hash: string) {
+    try {
+      const res = await http.get<BaseResponse<TransactionDetail>>(
+        `/txs/__pub/${tx_hash}`,
+      );
+      return res.data;
+    } catch (err) {
+      throwApiError(err);
     }
   }
 }

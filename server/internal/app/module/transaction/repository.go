@@ -17,6 +17,7 @@ type RpcTransactionRepository interface {
 
 type DbTransactionRepository interface {
 	// ---------------- Chain Transactions ----------------
+	GetDetailTransaction(ctx context.Context, tx_hash string) (dbchain.GetDetailTxRow, error)
 	GetCountRecentTransaction(ctx context.Context, pub_key_hash string) (int64, error)
 	GetRecentTransaction(ctx context.Context, arg dbchain.GetRecentTransactionParams) ([]dbchain.GetRecentTransactionRow, error)
 	GetFullTransactionByBlockHash(ctx context.Context, b_hash string, tx *sql.Tx) ([]dbchain.Transaction, error)

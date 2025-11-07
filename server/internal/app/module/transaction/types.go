@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"ChainServer/internal/common/client"
+	dbchain "ChainServer/internal/db/chain"
 	"time"
 )
 
@@ -38,4 +39,9 @@ type RPCGetMiningTxResponse[T any] struct {
 	Txs     []T
 	Count   int64
 	Error   *client.RPCError
+}
+
+type DetailTransaction struct {
+	dbchain.GetDetailTxRow
+	Difficulty int64
 }

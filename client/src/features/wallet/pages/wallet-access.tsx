@@ -1,7 +1,10 @@
-import { ChevronRight, History, Send, Settings } from 'lucide-react';
+'use server';
+
+import { ChevronRight, History, Send } from 'lucide-react';
 import BalanceCard from '../components/me/balance-card';
 import StatList from '../components/me/stat-list';
 import RecentTransaction from '../components/me/recent-tx-list';
+import Link from 'next/link';
 
 const WalletAccessPage = () => {
   return (
@@ -41,7 +44,10 @@ const WalletAccessPage = () => {
                 Quick Actions
               </h3>
               <div className="space-y-2">
-                <button className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all text-left group">
+                <Link
+                  href={'/txs/send'}
+                  className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all text-left group"
+                >
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30">
                       <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -51,8 +57,11 @@ const WalletAccessPage = () => {
                     </span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-                </button>
-                <button className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all text-left group">
+                </Link>
+                <Link
+                  href="/txs"
+                  className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all text-left group"
+                >
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30">
                       <History className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -62,18 +71,7 @@ const WalletAccessPage = () => {
                     </span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-                </button>
-                <button className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all text-left group">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700">
-                      <Settings className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      Wallet Settings
-                    </span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-                </button>
+                </Link>
               </div>
             </div>
           </div>

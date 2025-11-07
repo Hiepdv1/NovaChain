@@ -488,3 +488,22 @@ func (s *TransactionService) GetRecentTransaction(
 
 	return txs, pagination, nil
 }
+
+func (s *TransactionService) GetDetailTransaction(params *GetTransactionDetailDto) (*DetailTransaction, *apperror.AppError) {
+	ctx := context.Background()
+
+	tx, err := s.dbRepo.GetDetailTransaction(ctx, params.TxHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperror.NotFound("TxHash not found", nil)
+		}
+
+		log.Errorf("Failed to get detail transaction: %v", err)
+		return nil, apperror.Internal("Something went wrong, please try again", nil)
+	}
+
+	return &DetailTransaction{
+		GetDetailTxRow: tx,
+		Difficulty:     int64(utils.DifficultyFromNBits(uint32(tx.Nbits))),
+	}, nil
+}

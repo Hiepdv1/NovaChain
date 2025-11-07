@@ -106,7 +106,6 @@ const VerifyTransaction = ({
       txData.fee,
       txData.amount,
       Math.floor(Date.now() / 1000),
-      txData.message,
       txData.priority,
     );
 
@@ -202,7 +201,7 @@ const VerifyTransaction = ({
 
                   <div className="glass-card rounded-lg p-3 border border-white/10">
                     <p className="text-xs break-all text-black">
-                      {wallet.data.Address.String}
+                      {wallet.data.data.Address.String}
                     </p>
                   </div>
 

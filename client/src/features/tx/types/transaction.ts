@@ -35,7 +35,6 @@ export interface SendTransactionData {
   amount: number;
   fee: number;
   transaction: Transaction;
-  message: string;
   receiverAddress: string;
   priority: number;
 }
@@ -117,4 +116,20 @@ export interface TransactionItem {
   Tohash: NullableString;
   Fee: NullableString;
   Amount: NullableString;
+}
+
+export interface TransactionDetail {
+  TxID: string;
+  Height: number;
+  BID: string;
+  Timestamp: number;
+  Fromhash: NullableString;
+  Tohash: NullableString;
+  Amount: NullableString;
+  Fee: NullableString;
+  Nbits: number;
+  Nonce: number;
+  Difficulty: number;
+  Miner: NullableString;
+  LastBlock: number;
 }

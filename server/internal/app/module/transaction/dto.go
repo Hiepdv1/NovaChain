@@ -151,3 +151,7 @@ type GetTransactionSearchDto struct {
 type GetTransactionPendingDto struct {
 	dto.PaginationQuery
 }
+
+type GetTransactionDetailDto struct {
+	TxHash string `params:"tx_hash" validate:"required,hexadecimal,len=64"`
+}

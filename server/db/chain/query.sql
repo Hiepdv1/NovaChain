@@ -455,8 +455,39 @@ ORDER BY create_at DESC
 OFFSET $1
 LIMIT $2;
 
-
 -- name: CountRecentTransaction :one
 SELECT COUNT(*) FROM transactions
 WHERE fromhash = sqlc.arg('pub_key_hash')::TEXT OR
 tohash = sqlc.arg('pub_key_hash')::TEXT;
+
+-- name: GetDetailTx :one
+WITH last_block AS (
+  SELECT MAX(height) AS last_block FROM blocks
+),
+miner_info AS (
+  SELECT 
+    i.b_id,
+    o.pub_key_hash AS miner
+  FROM tx_inputs i
+  JOIN tx_outputs o ON o.tx_id = i.tx_id
+  WHERE i.out_index = -1
+)
+SELECT 
+  tx.tx_id,
+  b.height,
+  b.b_id,
+  b.timestamp,
+  tx.fromhash,
+  tx.tohash,
+  tx.amount,
+  tx.fee,
+  b.nbits,
+  b.nonce,
+  m.miner,
+  lb.last_block
+FROM transactions tx
+JOIN blocks b ON tx.b_id = b.b_id
+LEFT JOIN miner_info m ON m.b_id = b.b_id
+CROSS JOIN last_block lb
+WHERE tx.tx_id = sqlc.arg('tx_hash')::TEXT
+LIMIT 1;

@@ -28,7 +28,7 @@ const NavList: NavLink[] = [
     id: 3,
     title: 'Transactions',
     to: '/txs',
-    active: ['/txs', '/txs/send'],
+    active: ['/txs', '/txs/send', '/txs/[txHash]'],
   },
   {
     id: 4,
