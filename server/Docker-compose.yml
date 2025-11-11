@@ -1,0 +1,29 @@
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fiber_api
+    entrypoint: ["./entrypoint.sh"]
+    ports:
+      - "3001:3001"
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./.env:/app/.env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: chain
+    ports:
+      - "5432:5432"
+    restart: always

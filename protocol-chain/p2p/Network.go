@@ -48,11 +48,13 @@ var (
 	}
 	MinerAddress = ""
 
-	identityFile = path.Join(Root, "/.identity")
+	identityFile      = path.Join(Root, "/.identity")
+	reconnectingPeers sync.Map
 )
 
 var bootstrapPeers = []string{
-	"/ip4/172.28.0.10/tcp/9000/p2p/Qmb51pbTY5Nu7ERPJQLyK7kMQ96JQTSyPdxyWLcW4Zoq58",
+	"/ip4/103.139.154.23/tcp/9000/p2p/Qmb51pbTY5Nu7ERPJQLyK7kMQ96JQTSyPdxyWLcW4Zoq58",
+	"/ip4/103.139.154.23/tcp/9001/p2p/12D3KooWDuuLTYMT9jy6RukawRj4ZaNd1wzEtq3kTXTevVwP5Lhq",
 }
 
 func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner, fullNode, isSeedPeer bool, callback func(*Network)) {
@@ -65,7 +67,7 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 	defer bc.Database.Close()
 	go helpers.CloseDB(bc)
 
-	prvKey, err := LoadOrCreateIdentity(identityFile)
+	prvKey, err := LoadOrCreateIdentity(fmt.Sprintf("%s_%s", identityFile, listenPort))
 	if err != nil {
 		log.Errorf("Failed Load or create identity: %v", err)
 		return
@@ -158,6 +160,8 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 
 		Gossip:      g,
 		syncManager: syncManager,
+
+		syncCompleted: false,
 	}
 
 	worker := NewWorker(1000, ctx, Error, func(content *ChannelContent) {
@@ -171,7 +175,7 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 
 	go HandleEvents(network)
 
-	err = SetupDiscovery(ctx, host, isSeedPeer)
+	err = SetupDiscovery(ctx, host, isSeedPeer, network)
 	if err != nil {
 		log.Errorf("Set up discovery failed: %v", err)
 		return
@@ -201,7 +205,7 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 
 }
 
-func SetupDiscovery(ctx context.Context, host host.Host, isSeedPeer bool) error {
+func SetupDiscovery(ctx context.Context, host host.Host, isSeedPeer bool, net *Network) error {
 	mode := dht.ModeAuto
 	if isSeedPeer {
 		mode = dht.ModeServer
@@ -217,6 +221,15 @@ func SetupDiscovery(ctx context.Context, host host.Host, isSeedPeer bool) error 
 		return fmt.Errorf("failed to create DHT: %w", err)
 	}
 
+	host.Network().Notify(&network.NotifyBundle{
+		DisconnectedF: func(n network.Network, c network.Conn) {
+			log.Warnf("Peer disconnected: %s", c.RemotePeer())
+			go func() {
+				attemptReconnect(ctx, host, kademliaDHT, c.RemotePeer())
+			}()
+		},
+	})
+
 	if isSeedPeer {
 		log.Info("🌱 Seed peer initialized. Waiting for incoming peer connections...")
 	}
@@ -227,6 +240,7 @@ func SetupDiscovery(ctx context.Context, host host.Host, isSeedPeer bool) error 
 	go MaintainDHTBootstrap(ctx, kademliaDHT)
 	go startDiscoveryTasks(ctx, host, kademliaDHT)
 	go RefreshDHT(ctx, host, kademliaDHT)
+	go MonitorConnectivity(ctx, host, kademliaDHT, net)
 
 	return nil
 }
@@ -276,7 +290,6 @@ func ConnectBootstrapPeers(ctx context.Context, host host.Host, kademliaDHT *dht
 			defer wg.Done()
 
 			if err := host.Connect(ctx, p); err != nil {
-				log.Warnf("Failed to connect bootstrap peer %s: %v", p.ID, err)
 				return
 			}
 			log.Infof("✅ Connected bootstrap peer: %s", p.ID)
@@ -351,7 +364,6 @@ func DiscoveryPeers(ctx context.Context, host host.Host, kademliaDHT *dht.IpfsDH
 				}
 				if host.Network().Connectedness(p.ID) != network.Connected {
 					if err := host.Connect(ctx, p); err != nil {
-						log.Warnf("Failed to connect discovered peer %s: %v", p.ID, err)
 						continue
 					}
 					log.Infof("✅ Connected discovered peer: %s", p.ID.String())
@@ -400,4 +412,78 @@ func NewOptionsBackoffDiscovery(kademliaDHT *dht.IpfsDHT) (*discovery.RoutingDis
 	)
 
 	return routingDiscovery, backoffStrategy
+}
+
+func attemptReconnect(ctx context.Context, h host.Host, dht *dht.IpfsDHT, pid peer.ID) {
+	if _, loaded := reconnectingPeers.LoadOrStore(pid, struct{}{}); loaded {
+		return
+	}
+	defer reconnectingPeers.Delete(pid)
+
+	backoffTime := 1 * time.Second
+	deadline := time.Now().Add(2 * time.Minute)
+
+	for {
+		if time.Now().After(deadline) {
+			log.Warnf("⚠️ Reconnect timeout for peer %s, stop trying.", pid)
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if h.Network().Connectedness(pid) == network.Connected {
+			log.Infof("✅ Peer %s reconnected", pid)
+			return
+		}
+
+		peerInfo, err := dht.FindPeer(ctx, pid)
+		if err != nil {
+			time.Sleep(backoffTime)
+			backoffTime *= 2
+			if backoffTime > 10*time.Second {
+				backoffTime = 10 * time.Second
+			}
+			continue
+		}
+
+		if err := h.Connect(ctx, peerInfo); err != nil {
+			time.Sleep(backoffTime)
+			continue
+		}
+		log.Infof("✅ Successfully reconnected to peer %s", pid)
+		return
+	}
+}
+
+func MonitorConnectivity(ctx context.Context, host host.Host, dht *dht.IpfsDHT, net *Network) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	wasOffline := false
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			peers := host.Network().Peers()
+
+			if len(peers) == 0 && !wasOffline {
+				wasOffline = true
+				log.Warn("[NETWORK] Node is offline or isolated. Attempting to reconnect...")
+				bootstrapDHT(ctx, dht)
+				ConnectBootstrapPeers(ctx, host, dht)
+				time.Sleep(3 * time.Second)
+			}
+
+			if wasOffline && len(peers) > 0 {
+				wasOffline = false
+				log.Info("[NETWORK] Node reconnected to network. Starting resync...")
+				net.HandleRequestSync()
+			}
+		}
+	}
 }

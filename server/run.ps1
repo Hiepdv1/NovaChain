@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 # -------------------------
 # Configs
 # -------------------------
-$env:POSTGRES_URL = "postgres://postgres:1@localhost:5433/chain?sslmode=disable"
+$env:DATABASE_URL="postgresql://postgres:1@postgres:5432/chain?sslmode=disable"
 $migratePath = "migrations"
 $sqlcConfig = "sqlc.yaml"
 
@@ -62,6 +62,11 @@ function goTest {
     go test ./...
 }
 
+function dockerBuild {
+    Write-Host "🐳 Building Docker image fiber_api:latest (linux/amd64)..." -ForegroundColor Yellow
+    docker build --platform=linux/amd64 -t fiber_api:latest . --progress=plain
+}
+
 # -------------------------
 # Command dispatcher
 # -------------------------
@@ -75,6 +80,7 @@ function dispatch($cmd, $steps, $name) {
         "mdownall"  { migrateDownAll }
         "mnew"      { migrateNew $name }
         "sqlc"      { sqlcGen }
+        "docker"    { dockerBuild }
         default {
             Write-Host "❌ Unknown command: $cmd" -ForegroundColor Red
             Write-Host "Available commands:" -ForegroundColor Yellow
@@ -86,10 +92,10 @@ function dispatch($cmd, $steps, $name) {
             Write-Host "  mdownall  -> rollback ALL migrations (drop all tables)"
             Write-Host "  mnew      -> create new migration <-name required>"
             Write-Host "  sqlc      -> sqlc generate"
+            Write-Host "  docker    -> build Docker image fiber_api:latest"
         }
     }
 }
-
 # -------------------------
 # Run
 # -------------------------

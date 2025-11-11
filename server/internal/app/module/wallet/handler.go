@@ -32,14 +32,14 @@ func (h *WalletHandler) CreateWallet(c *fiber.Ctx) error {
 	}
 
 	c.Cookie(&fiber.Cookie{
-		Name:     constants.CookieAccessToken,
-		Value:    *token,
-		Path:     "/",
-		Domain:   env.Cfg.Domain_Client,
-		Secure:   true,
-		HTTPOnly: true,
-		SameSite: "strict",
-		// MaxAge:      int(env.Cfg.Jwt_TTL_Minutes * 60),
+		Name:        constants.CookieAccessToken,
+		Value:       *token,
+		Path:        "/",
+		Domain:      env.Cfg.Domain_Client,
+		Secure:      true,
+		HTTPOnly:    true,
+		SameSite:    "strict",
+		MaxAge:      int(env.Cfg.Jwt_TTL_Minutes * 60),
 		SessionOnly: true,
 	})
 
@@ -61,14 +61,14 @@ func (h *WalletHandler) ImportWallet(c *fiber.Ctx) error {
 	}
 
 	c.Cookie(&fiber.Cookie{
-		Name:     constants.CookieAccessToken,
-		Value:    *token,
-		Path:     "/",
-		Domain:   env.Cfg.Domain_Client,
-		Secure:   true,
-		HTTPOnly: true,
-		SameSite: "strict",
-		// MaxAge:      int(env.Cfg.Jwt_TTL_Minutes * 60),
+		Name:        constants.CookieAccessToken,
+		Value:       *token,
+		Path:        "/",
+		Domain:      env.Cfg.Domain_Client,
+		Secure:      true,
+		HTTPOnly:    true,
+		SameSite:    "strict",
+		MaxAge:      int(env.Cfg.Jwt_TTL_Minutes * 60),
 		SessionOnly: true,
 	})
 

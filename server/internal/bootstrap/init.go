@@ -15,7 +15,7 @@ func Init() {
 	logger.InitLogger(env.Cfg.AppEnv)
 
 	redis.InitRedis(types.RedisConfig{
-		URL:          "redis://localhost:6379",
+		URL:          env.Cfg.Redis_Url,
 		MaxRetries:   10,
 		RetryBackoff: 3 * time.Second,
 		Namespaces: []types.RedisNamespaceConfig{

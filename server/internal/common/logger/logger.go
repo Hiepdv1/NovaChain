@@ -79,9 +79,9 @@ func addRotateHook(dir string, level log.Level, name string) {
 
 	hook, err := rotatefilehook.NewRotateFileHook(rotatefilehook.RotateFileConfig{
 		Filename:   file,
-		MaxSize:    10,
+		MaxSize:    2,
 		MaxBackups: 7,
-		MaxAge:     14,
+		MaxAge:     1,
 		Compress:   true,
 		Level:      level,
 		Formatter: &log.JSONFormatter{

@@ -54,8 +54,9 @@ type NetHeader struct {
 }
 
 type NetHeaderLocator struct {
-	SendFrom string
-	Locator  [][]byte
+	SendFrom   string
+	BestHeight int64
+	Locator    [][]byte
 }
 
 type NetGetDataSync struct {

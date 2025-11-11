@@ -268,6 +268,7 @@ func (ui *CLIUI) readFromLogs(net *Network) {
 
 	info, _ := f.Stat()
 	oldSize := info.Size()
+	lineCount := int64(0)
 
 	for {
 		for {
@@ -283,6 +284,17 @@ func (ui *CLIUI) readFromLogs(net *Network) {
 				}
 				log.Errorf("Read line error: %v", err)
 				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+
+			lineCount++
+
+			if lineCount >= 10000 {
+				f.Close()
+				f, _ = os.OpenFile(logFile, os.O_TRUNC|os.O_WRONLY, 0644)
+				r = bufio.NewReader(f)
+				lineCount = 0
+				log.Infof("Log file truncated after 10000 lines: %s", logFile)
 				continue
 			}
 

@@ -1,18 +1,15 @@
 
 services:
-  seed:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    platform: linux/amd64
+  seed_1:
     image: blockchain:latest
-    container_name: seed
+    container_name: seed_1
     entrypoint: ["./entrypoint.sh"]
+    restart: always
     volumes:
-      - fullnode_data:/app/.chain
+      - seed_1_data:/app/.chain
       - ./.env:/app/.env
       - ./logs/fullnode:/app/logs
-      - ./.identity:/app/.identity
+      - ./.identity_1:/app/.identity_9000
     environment:
       - INSTANCE_ID=9000
       - WALLET_ADDRESS=1NcsxXLcNSHz7cZjRERLYTKtR8fUx7Qh3e
@@ -21,50 +18,43 @@ services:
       - WALLET_ADDRESS_CHECKSUM=4
     ports:
       - "9000:9000"
-    networks:
-      blocknet:
-        ipv4_address: 172.28.0.10
     stdin_open: true
     tty: true
+    networks:
+      - blockchain_net
+
+  seed_2:
+    image: blockchain:latest
+    container_name: seed_2
+    restart: always
+    entrypoint: ["./entrypoint.sh"]
+    volumes:
+      - seed_2_data:/app/.chain
+      - ./.env:/app/.env
+      - ./logs/fullnode:/app/logs
+      - ./.identity_2:/app/.identity_9001
+    environment:
+      - INSTANCE_ID=9001
+      - WALLET_ADDRESS=1MqZxgwHHrun6gp8bVB2nFejiDRvhtPVK8
+      - PORT=9001
+      - START_NODE_FLAGS=--Fullnode=true --SeedPeer=true
+      - WALLET_ADDRESS_CHECKSUM=4
+    ports:
+      - "9001:9001"
+    stdin_open: true
+    tty: true
+    networks:
+      - blockchain_net
 
   miner_1:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    platform: linux/amd64
     image: blockchain:latest
     container_name: miner_1
     entrypoint: ["./entrypoint.sh"]
+    restart: always
     volumes:
       - miner_1_data:/app/.chain
       - ./.env:/app/.env
       - ./logs/miner_1:/app/logs
-    environment:
-      - INSTANCE_ID=9001
-      - WALLET_ADDRESS=1AAiHwi2eoTHt6G4VdYP7gL6WcDPYJLf9H
-      - PORT=9001
-      - START_NODE_FLAGS=--Miner=true --Address=1AAiHwi2eoTHt6G4VdYP7gL6WcDPYJLf9H
-      - WALLET_ADDRESS_CHECKSUM=4
-    ports:
-      - "9001:9001"
-    networks:
-      blocknet:
-        ipv4_address: 172.28.0.11
-    stdin_open: true
-    tty: true
-
-  miner_2:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    platform: linux/amd64
-    image: blockchain:latest
-    container_name: miner_2
-    entrypoint: ["./entrypoint.sh"]
-    volumes:
-      - miner_2_data:/app/.chain
-      - ./.env:/app/.env
-      - ./logs/miner_2:/app/logs
     environment:
       - INSTANCE_ID=9002
       - WALLET_ADDRESS=1FrBKbuGRApHz9RNxdeJ5SMu3ojQiSwATS
@@ -73,19 +63,15 @@ services:
       - WALLET_ADDRESS_CHECKSUM=4
     ports:
       - "9002:9002"
-    networks:
-      blocknet:
-        ipv4_address: 172.28.0.12
     stdin_open: true
     tty: true
+    networks:
+      - blockchain_net
 
   fullnode_rpc:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    platform: linux/amd64
     image: blockchain:latest
     container_name: fullnode_rpc
+    restart: always
     entrypoint: ["./entrypoint.sh"]
     volumes:
       - fullnode_owner_data:/app/.chain
@@ -98,23 +84,20 @@ services:
       - START_NODE_FLAGS=--Fullnode=true --RPC=true --RPC-Port=9050 --RPC-Addr=0.0.0.0 --RPC-Mode=http
       - WALLET_ADDRESS_CHECKSUM=4
     ports:
-      - "9003:9003"
-      - "9050:9050"
-    networks:
-      blocknet:
-        ipv4_address: 172.28.0.13
+      - "9003:9003"    
+      - "9050:9050" 
     stdin_open: true
     tty: true
+    networks:
+      - blockchain_net
 
 volumes:
-  fullnode_data:
+  seed_1_data:
+  seed_2_data:
   miner_1_data:
-  miner_2_data:
   fullnode_owner_data:
 
 networks:
-  blocknet:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.28.0.0/24
+  blockchain_net:
+    external: true
+
