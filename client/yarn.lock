@@ -485,6 +485,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@netlify/plugin-nextjs@npm:^5.14.5":
+  version: 5.14.5
+  resolution: "@netlify/plugin-nextjs@npm:5.14.5"
+  checksum: 10c0/d6588296f5914913943c2a0910df523d6e67ca859877c90c45c4ca56ba1295acd0c9dea08533e9702c2eeff353720e43be26b7bc1e4bdeba69ebc83680deff77
+  languageName: node
+  linkType: hard
+
 "@next/env@npm:15.4.4":
   version: 15.4.4
   resolution: "@next/env@npm:15.4.4"
@@ -2098,6 +2105,7 @@ __metadata:
   resolution: "client@workspace:."
   dependencies:
     "@eslint/eslintrc": "npm:^3"
+    "@netlify/plugin-nextjs": "npm:^5.14.5"
     "@radix-ui/react-dropdown-menu": "npm:^2.1.16"
     "@radix-ui/react-slot": "npm:^1.2.3"
     "@radix-ui/react-tooltip": "npm:^1.2.8"

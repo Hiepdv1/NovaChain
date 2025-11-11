@@ -1,0 +1,11 @@
+[build]
+  base = "Client"
+  
+  command = "yarn install && yarn build"
+  
+  publish = "Client/.next"
+  
+  functions = "Client/.netlify/functions"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
