@@ -1,0 +1,13 @@
+[build]
+  base = "client"
+  command = "yarn install && yarn build"
+  publish = ".next"
+
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_API_URL,NEXT_PUBLIC_APP,NEXT_PUBLIC_CHAIN_VERSION,NEXT_PUBLIC_ENCODE_DATA_SECRET_KEY,NEXT_PUBLIC_SYSTEM_KEY,NEXT_PUBLIC_WALLET_PADDING"
+
+[functions]
+  directory = ".netlify/functions"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
