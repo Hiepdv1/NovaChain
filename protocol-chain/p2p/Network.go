@@ -39,6 +39,8 @@ const (
 	commandLength = 20
 
 	DHT_PREFIX = "/novaChain"
+
+	EXPIRY_PEER = 10 * time.Minute
 )
 
 var (
@@ -57,7 +59,7 @@ var bootstrapPeers = []string{
 	"/ip4/103.139.154.23/tcp/9001/p2p/12D3KooWDuuLTYMT9jy6RukawRj4ZaNd1wzEtq3kTXTevVwP5Lhq",
 }
 
-func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner, fullNode, isSeedPeer bool, callback func(*Network)) {
+func StartNode(logFile string, bc *blockchain.Blockchain, listenPort, minerAddress string, miner, fullNode, isSeedPeer bool, callback func(*Network)) {
 
 	MinerAddress = minerAddress
 
@@ -194,12 +196,16 @@ func StartNode(bc *blockchain.Blockchain, listenPort, minerAddress string, miner
 	}
 
 	go network.HandleRequestSync()
+	go network.HandleRequestGossipPeer(ctx)
 
 	if miner {
 		go network.MinersEventLoop()
 	}
 
-	if err := ui.Run(network); err != nil {
+	go StartPeerMaintenance(ctx, network.Host)
+	go SyncConnectedPeers(ctx, network.Host)
+
+	if err := ui.Run(network, logFile); err != nil {
 		log.Errorf("Error running CLI UI: %v", err)
 	}
 
@@ -223,7 +229,13 @@ func SetupDiscovery(ctx context.Context, host host.Host, isSeedPeer bool, net *N
 
 	host.Network().Notify(&network.NotifyBundle{
 		DisconnectedF: func(n network.Network, c network.Conn) {
-			log.Warnf("Peer disconnected: %s", c.RemotePeer())
+			remotePeer := c.RemotePeer()
+			log.Warnf("Peer disconnected: %s", remotePeer)
+			addrs := n.Peerstore().Addrs(remotePeer)
+			for _, addr := range addrs {
+				full := fmt.Sprintf("%s/p2p/%s", addr.String(), remotePeer.String())
+				UpdatePeerStatus(full, false)
+			}
 			go func() {
 				attemptReconnect(ctx, host, kademliaDHT, c.RemotePeer())
 			}()
@@ -241,6 +253,7 @@ func SetupDiscovery(ctx context.Context, host host.Host, isSeedPeer bool, net *N
 	go startDiscoveryTasks(ctx, host, kademliaDHT)
 	go RefreshDHT(ctx, host, kademliaDHT)
 	go MonitorConnectivity(ctx, host, kademliaDHT, net)
+	go startReconnectCleaner(ctx, 5*time.Minute, EXPIRY_PEER)
 
 	return nil
 }
@@ -420,18 +433,11 @@ func attemptReconnect(ctx context.Context, h host.Host, dht *dht.IpfsDHT, pid pe
 	}
 	defer reconnectingPeers.Delete(pid)
 
-	backoffTime := 1 * time.Second
-	deadline := time.Now().Add(2 * time.Minute)
+	const maxRetries = 5
 
-	for {
-		if time.Now().After(deadline) {
-			log.Warnf("⚠️ Reconnect timeout for peer %s, stop trying.", pid)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if ctx.Err() != nil {
 			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		default:
 		}
 
 		if h.Network().Connectedness(pid) == network.Connected {
@@ -441,20 +447,48 @@ func attemptReconnect(ctx context.Context, h host.Host, dht *dht.IpfsDHT, pid pe
 
 		peerInfo, err := dht.FindPeer(ctx, pid)
 		if err != nil {
-			time.Sleep(backoffTime)
-			backoffTime *= 2
-			if backoffTime > 10*time.Second {
-				backoffTime = 10 * time.Second
-			}
+			log.Debugf("Reconnect %d/%d to %s failed: %v", attempt, maxRetries, pid, err)
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
 			continue
 		}
 
 		if err := h.Connect(ctx, peerInfo); err != nil {
-			time.Sleep(backoffTime)
+			log.Debugf("Connect attempt %d/%d to %s failed: %v", attempt, maxRetries, pid, err)
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
 			continue
 		}
-		log.Infof("✅ Successfully reconnected to peer %s", pid)
+
+		log.Infof("✅ Successfully reconnected to peer %s after %d attempts", pid, attempt)
 		return
+	}
+
+	log.Warnf("❌ Peer %s unreachable after %d retries, marking as dead for %v", pid, maxRetries, EXPIRY_PEER)
+	reconnectingPeers.Store(pid, time.Now().Add(EXPIRY_PEER))
+}
+
+func startReconnectCleaner(ctx context.Context, interval, expiry time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			reconnectingPeers.Range(func(key, value any) bool {
+				switch v := value.(type) {
+				case time.Time:
+					if now.After(v.Add(expiry)) {
+						reconnectingPeers.Delete(key)
+						log.Infof("🧹 Cleaned up expired peer: %s", key)
+					}
+				default:
+					reconnectingPeers.Delete(key)
+				}
+				return true
+			})
+		}
 	}
 }
 

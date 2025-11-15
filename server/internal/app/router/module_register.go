@@ -4,6 +4,7 @@ import (
 	"ChainServer/internal/app/module/applog"
 	"ChainServer/internal/app/module/chain"
 	"ChainServer/internal/app/module/dashboard"
+	"ChainServer/internal/app/module/download"
 	"ChainServer/internal/app/module/transaction"
 	"ChainServer/internal/app/module/utxo"
 	"ChainServer/internal/app/module/wallet"
@@ -40,5 +41,7 @@ func GetAllModuleRouters() []ModuleRouter {
 			chain.NewDBChainRepository(),
 			transaction.NewDbTransactionRepository(),
 		),
+
+		download.NewDownloadRoutes(),
 	}
 }

@@ -21,7 +21,15 @@ func main() {
 
 	app := bootstrap.InitRouter()
 
-	if err := app.Listen(fmt.Sprint(":", env.Cfg.ServerPort)); err != nil {
+	certFile := "ssl/cert.pem"
+	keyFile := "ssl/key.pem"
+
+	addr := fmt.Sprintf(":%s", env.Cfg.ServerPort)
+	if env.Cfg.AppEnv == "development" {
+		log.Infof("Starting server on https://localhost%s", addr)
+	}
+
+	if err := app.ListenTLS(addr, certFile, keyFile); err != nil {
 		log.Error("Listening server error: ", err)
 	}
 }

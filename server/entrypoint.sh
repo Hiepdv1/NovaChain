@@ -2,7 +2,7 @@
 set -e
 
 # -----------------------
-# Kiểm tra DATABASE_URL
+# DATABASE_URL
 # -----------------------
 if [ -z "$DATABASE_URL" ]; then
   echo "❌ DATABASE_URL is not set"
@@ -10,9 +10,12 @@ if [ -z "$DATABASE_URL" ]; then
 fi
 
 # -----------------------
-# Chạy migrations
+# migrations
 # -----------------------
 echo "🚀 Running migrations UP..."
 migrate -path ./migrations -database "$DATABASE_URL" up
 
-exec "./app"
+# -----------------------
+# server
+# -----------------------
+exec ./app

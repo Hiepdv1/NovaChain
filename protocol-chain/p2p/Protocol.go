@@ -19,4 +19,7 @@ const (
 	PREFIX_INVENTORY    = "inv"
 	PREFIX_DATA_TX      = "tx_Data"
 	PREFIX_TXS_Data     = "txs"
+
+	PREFIX_REQUEST_GOSSIP_PEERS = "request_gossip_peers"
+	PREFOX_GOSSIP_PEERS         = "gossip_peers"
 )

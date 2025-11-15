@@ -148,3 +148,23 @@ func (net *Network) SendTxPoolInv(sendTo string, txHashes [][]byte) {
 		return
 	}
 }
+
+func (net *Network) SendRequestGossipPeer(sendTo string, inv NetRequestGossipPeer) {
+	payload := GobEncode(inv)
+	request := append(CmdToBytes(PREFIX_REQUEST_GOSSIP_PEERS), payload...)
+	err := net.FullNodesChannel.Publish("Sending Request gossip peers", request, sendTo)
+	if err != nil {
+		log.Errorf("Failed to publish Request gossip peers: %v", err)
+		return
+	}
+}
+
+func (net *Network) SendGossipPeers(sendTo string, inv NetGossipPeers) {
+	payload := GobEncode(inv)
+	request := append(CmdToBytes(PREFOX_GOSSIP_PEERS), payload...)
+	err := net.FullNodesChannel.Publish("Sending gossip peers", request, sendTo)
+	if err != nil {
+		log.Errorf("Failed to publish gossip peers: %v", err)
+		return
+	}
+}
