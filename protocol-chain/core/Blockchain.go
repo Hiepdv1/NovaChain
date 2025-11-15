@@ -66,9 +66,12 @@ func Exists(InstanceId string) bool {
 	return DBExists(GetDatabasePath(InstanceId))
 }
 
-func InitBlockchain(instanceId string) (*Blockchain, error) {
+func InitBlockchain(chainDatapath string, instanceId string) (*Blockchain, error) {
 	var lastHash []byte
 	path := GetDatabasePath(instanceId)
+	if chainDatapath != "" {
+		path = fmt.Sprintf("%s/.chain/blocks_%s", chainDatapath, instanceId)
+	}
 
 	if DBExists(path) {
 		return nil, fmt.Errorf("%s", "Blockchain already exist")
@@ -145,8 +148,13 @@ func InitBlockchain(instanceId string) (*Blockchain, error) {
 	return chain, nil
 }
 
-func OpenBadgerDB(instanceId string) (*badger.DB, error) {
+func OpenBadgerDB(instanceId string, chainDataPath ...string) (*badger.DB, error) {
+
 	path := GetDatabasePath(instanceId)
+
+	if len(chainDataPath) > 0 {
+		path = fmt.Sprintf("%s/.chain/blocks_%s", chainDataPath[0], instanceId)
+	}
 
 	log.Info("Path: ", path)
 
@@ -168,12 +176,12 @@ func OpenBadgerDB(instanceId string) (*badger.DB, error) {
 	return db, nil
 }
 
-func (bc *Blockchain) ContinueBlockchain() (*Blockchain, error) {
+func (bc *Blockchain) ContinueBlockchain(chainData ...string) (*Blockchain, error) {
 	var lastHash []byte
 	var db *badger.DB
 
 	if bc.Database == nil {
-		database, err := OpenBadgerDB(bc.InstanceId)
+		database, err := OpenBadgerDB(bc.InstanceId, chainData[0])
 		if err != nil {
 			return nil, err
 		}

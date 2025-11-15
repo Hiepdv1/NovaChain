@@ -104,3 +104,13 @@ type NetTransactionData struct {
 	SendFrom     string
 	Transactions []blockchain.Transaction
 }
+
+type NetRequestGossipPeer struct {
+	SendFrom string
+	Count    int64
+}
+
+type NetGossipPeers struct {
+	SendFrom string
+	Peers    []string
+}

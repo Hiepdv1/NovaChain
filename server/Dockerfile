@@ -22,6 +22,7 @@ RUN curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/
 COPY --from=builder /app/app .
 COPY migrations ./migrations
 COPY entrypoint.sh .
+COPY ssl ./ssl 
 
 RUN chmod +x app entrypoint.sh
 

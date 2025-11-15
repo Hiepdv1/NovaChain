@@ -24,7 +24,7 @@ var (
 	checkSumlength = conf.WalletAddressCheckSum
 )
 
-func (cli *CommandLine) CreateBlockchain() {
+func (cli *CommandLine) CreateBlockchain(chainData string) {
 	defer helpers.RecoverAndLog()
 	if blockchain.Exists(cli.Blockchain.InstanceId) {
 		log.Infof("Blockchain already exists for instance ID: %s", cli.Blockchain.InstanceId)
@@ -32,7 +32,7 @@ func (cli *CommandLine) CreateBlockchain() {
 		return
 	}
 
-	chain, err := blockchain.InitBlockchain(cli.Blockchain.InstanceId)
+	chain, err := blockchain.InitBlockchain(chainData, cli.Blockchain.InstanceId)
 	if err != nil {
 		log.Error(err)
 		return
@@ -49,8 +49,9 @@ func (cli *CommandLine) CreateBlockchain() {
 
 }
 
-func (cli *CommandLine) StartNode(listenPort, minerAddress string, miner, fullNode, isSeedPeer bool, callback func(*p2p.Network)) {
+func (cli *CommandLine) StartNode(logFile, chainData, listenPort, minerAddress string, miner, fullNode, isSeedPeer bool, callback func(*p2p.Network)) {
 	defer helpers.RecoverAndLog()
+
 	if miner {
 		log.Infof("Starting Node %s as a MINER", listenPort)
 		if len(minerAddress) > 0 {
@@ -62,17 +63,28 @@ func (cli *CommandLine) StartNode(listenPort, minerAddress string, miner, fullNo
 		log.Infof("Starting Node on PORT: %s", listenPort)
 	}
 
-	chain, err := cli.Blockchain.ContinueBlockchain()
+	chain, err := cli.Blockchain.ContinueBlockchain(chainData)
 	if err != nil {
 		log.Error(err)
 		return
 	}
-	p2p.StartNode(chain, listenPort, minerAddress, miner, fullNode, isSeedPeer, callback)
+
+	if cli.CloseDbAlways {
+		defer chain.Database.Close()
+	}
+
+	p2p.StartNode(logFile, chain, listenPort, minerAddress, miner, fullNode, isSeedPeer, callback)
 }
 
-func (cli *CommandLine) UpdateInstance(InstanceId string, closeDbAlways bool) (*CommandLine, error) {
+func (cli *CommandLine) UpdateInstance(InstanceId string, closeDbAlways bool, logfile ...string) (*CommandLine, error) {
 	defer helpers.RecoverAndLog()
-	utils.SetLog(InstanceId)
+	utils.SetLog(InstanceId, logfile[0])
+
+	if cli.Blockchain != nil && cli.Blockchain.Database != nil {
+		_ = cli.Blockchain.Database.Close()
+		cli.Blockchain = nil
+	}
+
 	cli.Blockchain.InstanceId = InstanceId
 
 	if blockchain.Exists(InstanceId) {

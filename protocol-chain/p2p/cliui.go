@@ -104,14 +104,14 @@ func ShortID(p peer.ID) string {
 	return peerId[len(peerId)-8:]
 }
 
-func (ui *CLIUI) Run(net *Network) error {
+func (ui *CLIUI) Run(net *Network, logFile string) error {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("UI Crashed: %v", r)
 		}
 	}()
 
-	go ui.handleEvents(net)
+	go ui.handleEvents(net, logFile)
 	defer ui.end()
 
 	return ui.app.Run()
@@ -164,11 +164,11 @@ func (ui *CLIUI) listenChannels(net *Network) {
 	}
 }
 
-func (ui *CLIUI) handleEvents(net *Network) {
+func (ui *CLIUI) handleEvents(net *Network, logFile string) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	go ui.readFromLogs(net)
+	go ui.readFromLogs(net, logFile)
 	go ui.listenChannels(net)
 
 	for {
@@ -223,13 +223,20 @@ func (ui *CLIUI) HandleStream(net *Network, content *ChannelContent) {
 			net.HandleGetTransactions(content)
 		case PREFIX_DATA_TX:
 			net.HandleGetDataTx(content)
+
+			// Gossip Peers
+		case PREFIX_REQUEST_GOSSIP_PEERS:
+			net.HandleGetRequestGossipPeer(content)
+		case PREFOX_GOSSIP_PEERS:
+			net.HandleGetGossipPeers(content)
 		default:
 			log.Warning("Unknown command received: ", command)
 		}
+
 	}
 }
 
-func (ui *CLIUI) readFromLogs(net *Network) {
+func (ui *CLIUI) readFromLogs(net *Network, logPath string) {
 	instanceId := net.Blockchain.InstanceId
 
 	filename := "/logs/console.log"
@@ -238,6 +245,10 @@ func (ui *CLIUI) readFromLogs(net *Network) {
 	}
 
 	logFile := path.Join(Root, filename)
+	if logPath != "" {
+		logFile = path.Join(logPath, filename)
+	}
+
 	log.SetOutput(io.Discard)
 
 	openLog := func() (*os.File, *bufio.Reader, error) {

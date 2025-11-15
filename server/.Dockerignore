@@ -13,5 +13,6 @@ build
 .idea
 **tests
 run.ps1
-internal/logs
+**logs
 sqlc.yml
+**downloads

@@ -19,6 +19,10 @@ const TransactionDetailPage = async ({
 
   try {
     const res = await transactionService.GetDetailTransaction(tx_hash);
+    if (!res) {
+      return <ErrorState message={'Failed to fetch data'} />;
+    }
+
     const transaction = res.data;
 
     return <TransactionCard transaction={transaction} />;

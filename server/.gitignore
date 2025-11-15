@@ -2,4 +2,6 @@ internal/logs/*.log
 .env
 
 **logs
-server-build
+**server-build
+**downloads
+**ssl

@@ -1,11 +1,6 @@
 #!/bin/sh
 set -e
 
-if ! docker network inspect blockchain_net >/dev/null 2>&1; then
-  echo "🔗 Creating docker network: blockchain_net"
-  docker network create blockchain_net
-fi
-
 if [ "$1" != "" ]; then
   echo "⚙️  Running custom command: ./app $@"
   exec ./app "$@" --InstanceId "$INSTANCE_ID"

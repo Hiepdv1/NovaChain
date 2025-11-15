@@ -1,6 +1,7 @@
 package main
 
 import (
+	cui "core-blockchain/cmd/demo/CUI"
 	utilCmd "core-blockchain/cmd/utils"
 	"core-blockchain/common/env"
 	utilLog "core-blockchain/common/utils"
@@ -15,13 +16,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Entry point
 func main() {
 	defer os.Exit(0)
-
 	conf := env.New()
 
-	// Global flags
 	var (
 		address    string
 		instanceID string
@@ -30,6 +28,8 @@ func main() {
 		rpcMode    string
 		rpcEnabled bool
 		isSeedPeer bool
+		chainData  string
+		LogFile    string
 	)
 
 	cli := utilCmd.CommandLine{
@@ -40,157 +40,80 @@ func main() {
 		P2P: nil,
 	}
 
-	//------------------------------------------------------------
-	// INIT COMMAND
-	//------------------------------------------------------------
+	// -----------------------
+	// INIT
+	// -----------------------
 	initCmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize the blockchain and create the genesis block",
+		Short: "Initialize NovaChain blockchain and create the genesis block",
 		Long: `Initialize a new blockchain instance with a genesis block.
 
 Required:
-  --InstanceId   Unique ID for this blockchain instance (auto-generated if omitted).
+  --InstanceId   Unique ID for this blockchain instance (auto-generated if omitted)
 
 Example:
-  blockchain init --InstanceId 1001
-`,
+  novachain init --InstanceId 1001`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if instanceID == "" {
 				instanceID = fmt.Sprintf("%d", time.Now().Unix())
-				log.Infof("No instance ID provided. Generated default ID: %s", instanceID)
+				log.Infof("No instance ID provided. Generated default: %s", instanceID)
 			}
-
-			cli, err := cli.UpdateInstance(instanceID, false)
+			cli, err := cli.UpdateInstance(instanceID, false, LogFile)
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			cli.CreateBlockchain()
+			cli.CreateBlockchain(chainData)
 			log.Infof("✅ Blockchain initialized successfully (Instance ID: %s)", instanceID)
 			cli.Blockchain.Database.Close()
 		},
 	}
 
-	//------------------------------------------------------------
-	// WALLET COMMAND GROUP
-	//------------------------------------------------------------
+	// -----------------------
+	// WALLET COMMAND
+	// -----------------------
 	walletCmd := &cobra.Command{
 		Use:   "wallet",
-		Short: "Manage blockchain wallets",
-		Long: `Create, list, or check wallet balances.
-
-Subcommands:
-  - new       Create a new wallet.
-  - list      List all wallets.
-  - balance   Get the balance of a wallet address.
-`,
+		Short: "Manage wallets",
+		Long:  `Create, list, or check wallet balances`,
 	}
 
-	// Create new wallet
-	newWalletCmd := &cobra.Command{
-		Use:   "new",
-		Short: "Create a new wallet",
-		Long:  `Generate a new wallet and print its address.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			cli.CreateWallet()
+	walletCmd.AddCommand(
+		&cobra.Command{
+			Use:   "new",
+			Short: "Create a new wallet",
+			Run: func(cmd *cobra.Command, args []string) {
+				cli.CreateWallet()
+			},
 		},
-	}
-
-	// List wallets
-	listWalletCmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all wallet addresses",
-		Long:  `List all wallet addresses stored locally.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			cli.ListWallet()
+		&cobra.Command{
+			Use:   "list",
+			Short: "List all wallet addresses",
+			Run: func(cmd *cobra.Command, args []string) {
+				cli.ListWallet()
+			},
 		},
-	}
-
-	// Check wallet balance
-	walletBalanceCmd := &cobra.Command{
-		Use:   "balance",
-		Short: "Check a wallet's balance",
-		Long: `Get the current balance of a given wallet address.
-
-Required:
-  --Address     Wallet address to check (must be 34 characters).
-  --InstanceId  Blockchain instance ID.
-
-Example:
-  blockchain wallet balance --Address <wallet_address> --InstanceId 1001
-`,
-		Run: func(cmd *cobra.Command, args []string) {
-			if address == "" {
-				log.Fatal("--Address flag is required")
-			}
-			if instanceID == "" {
-				log.Fatal("--InstanceId flag is required")
-			}
-
-			cli, err := cli.UpdateInstance(instanceID, true)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			cli.GetBalance(address)
+		&cobra.Command{
+			Use:   "balance",
+			Short: "Check wallet balance",
+			Run: func(cmd *cobra.Command, args []string) {
+				if address == "" {
+					log.Fatal("--Address flag is required")
+				}
+				if instanceID == "" {
+					log.Fatal("--InstanceId flag is required")
+				}
+				cli, err := cli.UpdateInstance(instanceID, true, LogFile)
+				if err != nil {
+					log.Fatal(err)
+				}
+				cli.GetBalance(address)
+			},
 		},
-	}
+	)
 
-	walletCmd.AddCommand(newWalletCmd, listWalletCmd, walletBalanceCmd)
-
-	//------------------------------------------------------------
-	// PRINT COMMANDS
-	//------------------------------------------------------------
-	printCmd := &cobra.Command{
-		Use:   "print",
-		Short: "Print all blocks in the blockchain",
-		Long:  `Display all blocks stored in the blockchain, including their transactions and metadata.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			if instanceID == "" {
-				log.Fatal("--InstanceId flag is required")
-			}
-
-			cli, err := cli.UpdateInstance(instanceID, true)
-			if err != nil {
-				log.Fatal(err)
-			}
-			cli.PrintBlockchain()
-		},
-	}
-
-	utxosCmd := &cobra.Command{
-		Use:   "utxos",
-		Short: "Show current UTXO set",
-		Long:  `Display all unspent transaction outputs currently stored in the blockchain database.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			cli, err := cli.UpdateInstance(instanceID, true)
-			if err != nil {
-				log.Fatal(err)
-			}
-			cli.PrintUtxos()
-		},
-	}
-
-	bestChainCmd := &cobra.Command{
-		Use:   "best-chain",
-		Short: "Print the best (longest) chain",
-		Long:  `Display the blocks in the current best chain.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			if instanceID == "" {
-				log.Fatal("--InstanceId flag is required")
-			}
-
-			cli, err := cli.UpdateInstance(instanceID, true)
-			if err != nil {
-				log.Fatal(err)
-			}
-			cli.PrintBestChain()
-		},
-	}
-
-	//------------------------------------------------------------
-	// NODE COMMAND
-	//------------------------------------------------------------
+	// -----------------------
+	// NODE
+	// -----------------------
 	var (
 		minerAddress string
 		miner        bool
@@ -200,29 +123,23 @@ Example:
 
 	nodeCmd := &cobra.Command{
 		Use:   "startNode",
-		Short: "Start a blockchain node",
-		Long: `Start a full node or mining node in the blockchain network.
+		Short: "Start a NovaChain node",
+		Long: `Start a full node or mining node in the network.
 
 Required:
-  --Port         Port to listen on.
-  --InstanceId   Blockchain instance ID.
+  --Port        Port to listen on
+  --InstanceId  Blockchain instance ID
 
 Optional:
-  --Miner        Run as a mining node (true/false).
-  --Fullnode     Run as a full node (true/false).
-  --Address      Miner address (required if --Miner is true).
-  --SeedPeer     Enable seed peer discovery.
-  --RPC          Enable JSON-RPC server.
-  --RPC-Port     RPC server port (default: 9000).
-  --RPC-Addr     RPC server bind address (default: 127.0.0.1).
-  --RPC-Mode     Choose 'http', 'tcp', or 'both'.
+  --Miner       Run as mining node (true/false)
+  --Address     Miner address (required if --Miner=true)
+  --SeedPeer    Enable seed peer discovery
+  --RPC         Enable JSON-RPC server
 
-Example:
-  blockchain startNode --Port 3000 --InstanceId 1001 --Miner true --Address <wallet_address>
-`,
+If no flags are provided, node runs as full node by default.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if instanceID == "" {
-				log.Fatal("--InstanceId flag is required")
+				log.Fatal("❌ You must run 'novachain init' before starting a node")
 			}
 			if listenPort == "" {
 				log.Fatal("--Port flag is required")
@@ -230,18 +147,20 @@ Example:
 			if miner && minerAddress == "" {
 				log.Fatal("Miner address is required when --Miner is true")
 			}
+			if !miner && !fullNode {
+				fullNode = true
+			}
 
 			logPath := fmt.Sprintf("/logs/console_%s.log", instanceID)
 			_ = utilLog.ClearLogFile(logPath)
+			log.Infof("🔧 Starting node (Instance: %s, Port: %s, FullNode: %v, Miner: %v)", instanceID, listenPort, fullNode, miner)
 
-			cli, err := cli.UpdateInstance(instanceID, false)
+			cli, err := cli.UpdateInstance(instanceID, false, LogFile)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			log.Infof("🔧 Starting node (Instance: %s, Port: %s)", instanceID, listenPort)
-
-			cli.StartNode(listenPort, minerAddress, miner, fullNode, isSeedPeer, func(net *p2p.Network) {
+			cli.StartNode(LogFile, chainData, listenPort, minerAddress, miner, fullNode, isSeedPeer, func(net *p2p.Network) {
 				log.Info("✅ Node started successfully")
 				if miner {
 					log.Info("Running in Miner mode")
@@ -254,109 +173,52 @@ Example:
 		},
 	}
 
-	nodeCmd.Flags().StringVar(&listenPort, "Port", conf.ListenPort, "Node listening port (Required)")
-	nodeCmd.Flags().StringVar(&minerAddress, "Address", conf.MinerAddress, "Miner address (Required if --Miner=true)")
-	nodeCmd.Flags().BoolVar(&miner, "Miner", conf.Miner, "Set true to enable mining mode")
-	nodeCmd.Flags().BoolVar(&fullNode, "Fullnode", conf.FullNode, "Set true to run as a full node")
+	nodeCmd.Flags().StringVar(&listenPort, "Port", conf.ListenPort, "Node listening port")
+	nodeCmd.Flags().StringVar(&minerAddress, "Address", conf.MinerAddress, "Miner address")
+	nodeCmd.Flags().BoolVar(&miner, "Miner", conf.Miner, "Enable mining mode")
+	nodeCmd.Flags().BoolVar(&fullNode, "Fullnode", conf.FullNode, "Run as full node")
 	nodeCmd.Flags().BoolVar(&isSeedPeer, "SeedPeer", false, "Enable seed peer discovery")
 
-	//------------------------------------------------------------
-	// SEND COMMAND
-	//------------------------------------------------------------
-	var (
-		mineNow  bool
-		sendFrom string
-		sendTo   string
-		amount   float64
-		fee      float64
-	)
-
-	sendCmd := &cobra.Command{
-		Use:   "send",
-		Short: "Send tokens between wallets",
-		Long: `Send tokens from one wallet to another.
-
-Required:
-  --SendFrom   Sender wallet address (34 characters)
-  --SendTo     Recipient wallet address (34 characters)
-  --Amount     Amount to send (> 0)
-
-Optional:
-  --Fee        Transaction fee (default: 1/PER_COIN)
-  --Mine       Immediately mine the transaction
-
-Example:
-  blockchain send --SendFrom <sender> --SendTo <receiver> --Amount 10 --Fee 0.01 --Mine
-`,
-		Run: func(cmd *cobra.Command, args []string) {
-			if sendFrom == "" || sendTo == "" || amount <= 0 {
-				log.Fatal("Missing required flags: --SendFrom, --SendTo, and --Amount are mandatory")
-			}
-			// cli.Send(sendFrom, sendTo, amount, fee, mineNow)
-		},
-	}
-
-	sendCmd.Flags().StringVar(&sendFrom, "SendFrom", "", "Sender's wallet address")
-	sendCmd.Flags().StringVar(&sendTo, "SendTo", "", "Receiver's wallet address")
-	sendCmd.Flags().Float64Var(&amount, "Amount", 0, "Amount to send (> 0)")
-	sendCmd.Flags().Float64Var(&fee, "Fee", float64(1/blockchain.PER_COIN), "Transaction fee")
-	sendCmd.Flags().BoolVar(&mineNow, "Mine", false, "Mine transaction immediately")
-
-	//------------------------------------------------------------
+	// -----------------------
 	// ROOT COMMAND
-	//------------------------------------------------------------
+	// -----------------------
 	rootCmd := &cobra.Command{
-		Use:   "blockchain",
-		Short: "Blockchain CLI tool",
-		Long: `A command-line interface for managing and interacting with the blockchain system.
+		Use:   "novachain",
+		Short: "NovaChain CLI",
+		Long: `Command-line interface for running and interacting with the NovaChain blockchain.
 
-Global Flags:
-  --Address      Wallet address (34 characters)
-  --InstanceId   Unique blockchain instance ID
-  --RPC-Port     RPC server port (default: 9000)
-  --RPC-Addr     RPC server address (default: 127.0.0.1)
-  --RPC          Enable JSON-RPC server
-  --RPC-Mode     Choose 'http', 'tcp', or 'both'
+Examples:
+  1. Initialize blockchain:
+     novachain init --InstanceId 1001
 
-Example Workflows:
-  1. Initialize a blockchain:
-     blockchain init --InstanceId 1001
+  2. Start a node (default full node):
+     novachain startNode --Port 3000 --InstanceId 1001
 
-  2. Start a miner node:
-     blockchain startNode --Port 3000 --InstanceId 1001 --Miner true --Address <wallet_address>
+  3. Start a miner node:
+     novachain startNode --Port 3000 --InstanceId 1001 --Miner true --Address <wallet_address>
 
-  3. Create and list wallets:
-     blockchain wallet new
-     blockchain wallet list
-
-  4. Check balance:
-     blockchain wallet balance --Address <wallet_address> --InstanceId 1001
-
-  5. Send tokens:
-     blockchain send --SendFrom <addr1> --SendTo <addr2> --Amount 5 --Fee 0.01 --Mine
-
-  6. Inspect the chain:
-     blockchain print
+  4. Wallet management:
+     novachain wallet new
+     novachain wallet list
+     novachain wallet balance --Address <wallet_address> --InstanceId 1001
 `,
 	}
 
-	// Global persistent flags
-	rootCmd.PersistentFlags().StringVar(&address, "Address", "", "Your wallet address")
+	rootCmd.PersistentFlags().StringVar(&address, "Address", "", "Wallet address")
 	rootCmd.PersistentFlags().StringVar(&instanceID, "InstanceId", "", "Blockchain instance ID")
 	rootCmd.PersistentFlags().StringVar(&rpcPort, "RPC-Port", "9000", "RPC server port")
-	rootCmd.PersistentFlags().StringVar(&rpcAddress, "RPC-Addr", "127.0.0.1", "RPC server bind address")
+	rootCmd.PersistentFlags().StringVar(&rpcAddress, "RPC-Addr", "127.0.0.1", "RPC server address")
 	rootCmd.PersistentFlags().BoolVar(&rpcEnabled, "RPC", false, "Enable JSON-RPC server")
-	rootCmd.PersistentFlags().StringVar(&rpcMode, "RPC-Mode", "http", "Set RPC mode: 'http', 'tcp', or 'both'")
+	rootCmd.PersistentFlags().StringVar(&rpcMode, "RPC-Mode", "http", "RPC mode: http, tcp, both")
+	rootCmd.PersistentFlags().StringVar(&chainData, "ChainData", "", "Chain data")
+	rootCmd.PersistentFlags().StringVar(&LogFile, "LogFile", "", "Log data")
 
-	rootCmd.AddCommand(
-		initCmd,
-		walletCmd,
-		utxosCmd,
-		sendCmd,
-		printCmd,
-		nodeCmd,
-		bestChainCmd,
-	)
+	rootCmd.AddCommand(initCmd, walletCmd, nodeCmd)
+
+	if len(os.Args) == 1 {
+		cui.Start(&cli, "config.json")
+		return
+	}
 
 	rootCmd.Execute()
 }

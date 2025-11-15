@@ -42,6 +42,13 @@ const NavList: NavLink[] = [
     to: '/miners',
     active: ['/miners'],
   },
+
+  {
+    id: 6,
+    title: 'Docs',
+    to: '/docs',
+    active: ['/docs'],
+  },
 ];
 
 const NavBar = () => {

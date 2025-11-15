@@ -13,6 +13,7 @@ services:
       - .env
     volumes:
       - ./.env:/app/.env
+      - ./ssl:/app/ssl
     environment:
       - TZ=Asia/Ho_Chi_Minh
     depends_on:
