@@ -19,10 +19,14 @@ var (
 	Root = filepath.Join(filepath.Dir(file), "../../")
 )
 
-func SetLog(InstanceId string) {
+func SetLog(InstanceId, logfile string) {
 	var logLevel = log.InfoLevel
 
 	dir := path.Join(Root, "/logs/")
+
+	if logfile != "" {
+		dir = fmt.Sprintf("%s/logs/", logfile)
+	}
 
 	fileName := path.Join("console.log")
 

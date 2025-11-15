@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"bytes"
+	"context"
 	blockchain "core-blockchain/core"
 	"core-blockchain/memopool"
 	"encoding/gob"
@@ -57,6 +58,31 @@ func (net *Network) HandleRequestSync() {
 	)
 
 	log.Infof("%s Header locator broadcast completed — waiting for peer responses...", logName)
+}
+
+func (net *Network) HandleRequestGossipPeer(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	for {
+		select {
+		case <-ticker.C:
+			net.Gossip.Broadcast(
+				net.FullNodesChannel.ListPeers(),
+				[]string{net.Host.ID().String()},
+				func(p peer.ID) {
+
+					net.SendRequestGossipPeer(
+						p.String(),
+						NetRequestGossipPeer{
+							SendFrom: net.Host.ID().String(),
+							Count:    5,
+						},
+					)
+				},
+			)
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (net *Network) HandleReoganizeTx(txs []*blockchain.Transaction) {
@@ -544,7 +570,7 @@ func (net *Network) HandleGetBlockData(content *ChannelContent) {
 		},
 	)
 
-	log.Debugf("%s Completed handling GetBlockData from peer=%s for block hash=%x height=%d", logName, content.SendFrom, block.Hash[:6], block.Height)
+	log.Infof("%s Completed handling GetBlockData from peer=%s for block hash=%x height=%d", logName, content.SendFrom, block.Hash[:6], block.Height)
 }
 
 func (net *Network) HandleGetData(content *ChannelContent) {
@@ -778,6 +804,87 @@ func (net *Network) HandleGetTxFromPool(content *ChannelContent) {
 		net.SendTxPoolInv(payload.SendFrom, txs)
 	} else {
 		net.SendTxPoolInv(payload.SendFrom, [][]byte{})
+	}
+}
+
+func (net *Network) HandleGetRequestGossipPeer(content *ChannelContent) {
+	buf := new(bytes.Buffer)
+	var payload NetRequestGossipPeer
+
+	buf.Write(content.Payload[commandLength:])
+	dec := gob.NewDecoder(buf)
+	err := dec.Decode(&payload)
+	if err != nil {
+		log.Errorf("[HandleGetRequestGossipPeer] Failed to decode 'NetRequestGossipPeer' request: %v", err)
+		return
+	}
+
+	if payload.Count > 20 {
+		return
+	}
+
+	peerList, err := RandomHealthyPeers(int(payload.Count))
+	if err != nil {
+		log.Errorf("[HandleGetRequestGossipPeer] Failed to get random unique peers: %v", err)
+		return
+	}
+
+	net.SendGossipPeers(
+		payload.SendFrom,
+		NetGossipPeers{
+			SendFrom: net.Host.ID().String(),
+			Peers:    peerList.ListAddrs(),
+		},
+	)
+
+}
+
+func (net *Network) HandleGetGossipPeers(content *ChannelContent) {
+	buf := new(bytes.Buffer)
+	var payload NetGossipPeers
+
+	buf.Write(content.Payload[commandLength:])
+	dec := gob.NewDecoder(buf)
+	err := dec.Decode(&payload)
+	if err != nil {
+		log.Errorf("[HandleGetGossipPeers] Failed to decode 'NetGossipPeers' request: %v", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	for _, addr := range payload.Peers {
+		log.Infof("Address Peer: %s", addr)
+		peerInfo, err := peer.AddrInfoFromString(addr)
+		if err != nil {
+			log.Errorf("[HandleGetGossipPeers]invalid peer address format: %v", err)
+			continue
+		}
+
+		if peerInfo.ID == net.Host.ID() {
+			continue
+		}
+
+		err = AddPeer(addr)
+		if err != nil {
+			log.Errorf("[HandleGetGossipPeers]Failed to add peer %v", err)
+			continue
+		}
+
+		err = SafeConnect(ctx, net.Host, addr)
+		if err != nil {
+			log.Errorf("Failed to connected peer %v", err)
+			err := UpdatePeerStatus(addr, false)
+			if err != nil {
+				log.Errorf("[HandleGetGossipPeers]Failed to update peer %v", err)
+			}
+			continue
+		}
+
+		err = UpdatePeerStatus(addr, true)
+		if err != nil {
+			log.Errorf("[HandleGetGossipPeers]Failed to update peer %v", err)
+		}
 	}
 }
 

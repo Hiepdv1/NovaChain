@@ -52,4 +52,5 @@ func (r *ChainRoutes) RegisterPublic(router fiber.Router) {
 		middlewares.ValidateQuery[dto.PaginationQuery](false),
 		r.handler.GetMiners,
 	)
+
 }

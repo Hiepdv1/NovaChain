@@ -19,6 +19,7 @@ import { formatAddress } from '@/lib/utils';
 import { StoredWallet } from '@/shared/types/wallet';
 import {
   Activity,
+  Book,
   Check,
   ChevronDown,
   Copy,
@@ -64,6 +65,12 @@ const MenuList: MenuItem[] = [
     title: 'Access Wallet',
     icon: Settings,
     path: '/wallet/me',
+  },
+  {
+    id: 5,
+    title: 'Docs',
+    icon: Book,
+    path: '/docs',
   },
 ];
 

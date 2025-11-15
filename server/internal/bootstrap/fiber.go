@@ -22,6 +22,14 @@ func InitRouter() *fiber.App {
 	}
 
 	app := fiber.New(fiber.Config{})
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "https://novaexplorer.netlify.app",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowCredentials: true,
+	}))
+
 	app.Use(middlewares.MiddlewareRecover())
 
 	app.Use(cors.New(config.CorsConfig()))

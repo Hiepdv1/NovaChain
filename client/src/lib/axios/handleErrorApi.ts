@@ -42,7 +42,7 @@ export class ApiError extends Error implements BaseErrorResponse {
   }
 }
 
-export function throwApiError(error: unknown): never {
+export function throwApiError(error: unknown) {
   if (error instanceof ApiError) throw error;
 
   if (typeof error === 'object' && error !== null && 'message' in error) {

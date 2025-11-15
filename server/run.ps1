@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 # -------------------------
 # Configs
 # -------------------------
-$env:DATABASE_URL="postgresql://postgres:1@postgres:5432/chain?sslmode=disable"
+$env:POSTGRES_URL = "postgres://postgres:1@localhost:5433/chain?sslmode=disable"
 $migratePath = "migrations"
 $sqlcConfig = "sqlc.yaml"
 
