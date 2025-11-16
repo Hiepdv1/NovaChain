@@ -1,35 +1,43 @@
-'use server';
+'use client';
 
-import { ApiError } from 'next/dist/server/api-utils';
 import NovaChain from '../components/nova-chain-page';
-import docService from '../services/docs.service';
-import ErrorState from '@/components/errorState';
 import { FormatFloat } from '@/shared/utils/format';
+import { useDownloadInfoQuery } from '../hooks/useDownloadQuery';
+import ErrorState from '@/components/errorState';
+import { useCallback } from 'react';
 
-export const revalidate = 0;
+const DocumentPage = () => {
+  const { isLoading, isFetching, isError, data, error, refetch } =
+    useDownloadInfoQuery();
 
-const DocumentPage = async () => {
-  try {
-    const res = await docService.InfoDowloadNovaChain();
+  const onRetry = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
-    if (!res) {
-      return <ErrorState message={'Failed to fetch data'} />;
-    }
-
-    const size = res.headers['content-length']
-      ? Number(res.headers['content-length'])
-      : 0;
-
-    const sizeFile = FormatFloat(size / 1024 / 1024, 2);
-
-    return <NovaChain SizeFile={sizeFile} />;
-  } catch (err) {
-    if (err instanceof ApiError) {
-      return <ErrorState message={err.message} />;
-    }
-
-    return <ErrorState message={'Unknown error'} />;
+  if (isLoading || isFetching) {
+    return (
+      <div className="h-screen flex justify-center py-10">
+        <div
+          className="
+        h-6 w-6 
+        border-4 border-gray-300 dark:border-gray-700 
+        border-t-blue-600 dark:border-t-blue-400
+        rounded-full animate-spin
+      "
+        />
+      </div>
+    );
   }
+
+  if (isError || !data) {
+    return <ErrorState message={error?.message} onRetry={onRetry} />;
+  }
+
+  const info = data.data;
+
+  const sizeFile = FormatFloat(info.Size / 1024 / 1024, 2);
+
+  return <NovaChain SizeFile={sizeFile} />;
 };
 
 export default DocumentPage;

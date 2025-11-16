@@ -159,11 +159,10 @@ const CreateWalletForm = ({ showModalByName, onStepUpdate }: CreateWallet) => {
   }, [router, refetch, onStepUpdate]);
 
   const onAccessWallet = useCallback(async () => {
-    if (!refetch) return;
-    await refetch();
-    onStepUpdate(1, false);
     router.push('/wallet/me');
+    await refetch?.();
     router.refresh();
+    onStepUpdate(1, false);
   }, [router, refetch, onStepUpdate]);
 
   return (

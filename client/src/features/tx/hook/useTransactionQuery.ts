@@ -1,7 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import transactionService from '../services/transactions.service';
-import { BaseErrorResponse, BaseResponseList } from '@/shared/types/api';
-import { TransactionItem, TransactionPending } from '../types/transaction';
+import {
+  BaseErrorResponse,
+  BaseResponse,
+  BaseResponseList,
+} from '@/shared/types/api';
+import {
+  TransactionDetail,
+  TransactionItem,
+  TransactionPending,
+} from '../types/transaction';
 import { PaginationParam, QueryOptions } from '@/shared/types/query';
 
 export const useTransactionPending = (
@@ -46,5 +54,15 @@ export const usePendingTransactions = (
       return res;
     },
     ...opts,
+  });
+};
+
+export const useTransactionDetail = (tx_hash: string) => {
+  return useQuery<BaseResponse<TransactionDetail>, BaseErrorResponse>({
+    queryKey: ['txDetail'],
+    queryFn: async () => {
+      const res = await transactionService.GetDetailTransaction(tx_hash);
+      return res;
+    },
   });
 };

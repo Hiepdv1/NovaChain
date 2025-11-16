@@ -1,38 +1,43 @@
-'use server';
+'use client';
 
-import NotFoundState from '@/components/notfound';
-import transactionService from '../services/transactions.service';
-import { ApiError } from 'next/dist/server/api-utils';
+import { useParams } from 'next/navigation';
+import { useTransactionDetail } from '../hook/useTransactionQuery';
 import ErrorState from '@/components/errorState';
+import { useCallback } from 'react';
 import TransactionCard from '../components/tx-detail/transaction-card';
 
-interface PageParams {
-  tx_hash: string;
-}
+const TransactionDetailPage = ({}) => {
+  const { tx_hash } = useParams();
 
-const TransactionDetailPage = async ({
-  params,
-}: {
-  params: Promise<PageParams>;
-}) => {
-  const { tx_hash } = await params;
+  const { isLoading, isFetching, isError, data, error, refetch } =
+    useTransactionDetail(tx_hash as string);
 
-  try {
-    const res = await transactionService.GetDetailTransaction(tx_hash);
-    if (!res) {
-      return <ErrorState message={'Failed to fetch data'} />;
-    }
+  const onRetry = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
-    const transaction = res.data;
-
-    return <TransactionCard transaction={transaction} />;
-  } catch (err) {
-    if (err instanceof ApiError) {
-      if (err.statusCode === 404) return <NotFoundState />;
-      return <ErrorState message={err.message} />;
-    }
-    return <ErrorState />;
+  if (isLoading || isFetching) {
+    return (
+      <div className="flex justify-center py-10">
+        <div
+          className="
+        h-6 w-6 
+        border-4 border-gray-300 dark:border-gray-700 
+        border-t-blue-600 dark:border-t-blue-400
+        rounded-full animate-spin
+      "
+        />
+      </div>
+    );
   }
+
+  if (isError || !data) {
+    return <ErrorState message={error?.message} onRetry={onRetry} />;
+  }
+
+  const transaction = data.data;
+
+  return <TransactionCard transaction={transaction} />;
 };
 
 export default TransactionDetailPage;

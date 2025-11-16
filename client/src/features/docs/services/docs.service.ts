@@ -1,21 +1,18 @@
-import { throwApiError } from '@/lib/axios/handleErrorApi';
+import { BaseResponse } from './../../../shared/types/api';
+import { handleApiError } from '@/lib/axios/handleErrorApi';
 import { http } from '@/lib/axios/http';
-import https from 'https';
+import { DownloadInfo } from '../types/docs';
 
 class DocumentService {
   public async InfoDowloadNovaChain() {
     try {
-      const agent = new https.Agent({
-        rejectUnauthorized: false,
-      });
+      const res = await http.get<BaseResponse<DownloadInfo>>(
+        '/download/novachain.rar?query=info',
+      );
 
-      const res = await http.head('/download/novachain.rar', {
-        httpsAgent: agent,
-      });
-
-      return res;
+      return res.data;
     } catch (err) {
-      throwApiError(err);
+      throw handleApiError(err);
     }
   }
 }

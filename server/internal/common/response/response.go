@@ -66,9 +66,5 @@ func SendFileCustom(c *fiber.Ctx, filePath string, fileName string) error {
 	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 	c.Set("Content-Length", fmt.Sprintf("%d", file.Size()))
 
-	if c.Method() == "head" {
-		return nil
-	}
-
 	return c.SendFile(filePath)
 }

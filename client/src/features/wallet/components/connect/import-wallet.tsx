@@ -280,9 +280,9 @@ const ImportWallet = ({ onSwitchModal, onStepUpdate }: ImportWallet) => {
   };
 
   const onAccessWallet = async () => {
+    router.push('/wallet/me');
     await refetch?.();
     onStepUpdate(false, 1);
-    router.push('/wallet/me');
     router.refresh();
   };
 

@@ -275,6 +275,24 @@ const CreatePassword = ({
         </div>
 
         <NoticeBox
+          description="Your password should be strong: include uppercase, lowercase, numbers, and special characters for maximum security."
+          icon={
+            <svg
+              className="w-10 h-10 text-green-600 mt-1"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M9,12L7,10L5.5,11.5L9,15L18.5,5.5L17,4L9,12Z"></path>
+            </svg>
+          }
+          title="🔐 Strong Password Required"
+          variant="success"
+          style={{
+            animationDelay: '600ms',
+          }}
+        />
+
+        <NoticeBox
           description="Your private key will be encrypted with this password and stored
                 securely in your browser. Only you will have access to decrypt
                 it."

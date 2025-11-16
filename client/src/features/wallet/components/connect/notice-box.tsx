@@ -27,7 +27,7 @@ const NoticeBox = ({
       color.bgColor = 'bg-green-50';
       color.borderColor = 'border-green-600';
       color.titleColor = 'text-green-600';
-      color.desColor = 'text-green-500';
+      color.desColor = 'text-green-600';
       break;
     case 'warning':
       break;
@@ -51,7 +51,7 @@ const NoticeBox = ({
         <div>
           <p className={`${color.titleColor} font-semibold text-sm`}>{title}</p>
           <p
-            className={`${color.desColor} opacity-80 text-xs mt-1 leading-relaxed`}
+            className={`${color.desColor} opacity-80 text-sm mt-1 leading-relaxed`}
           >
             {description}
           </p>

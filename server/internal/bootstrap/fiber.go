@@ -6,6 +6,7 @@ import (
 	"ChainServer/internal/common/middlewares"
 	"ChainServer/internal/common/ratelimiter"
 	"ChainServer/internal/common/response"
+	"slices"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -23,8 +24,16 @@ func InitRouter() *fiber.App {
 
 	app := fiber.New(fiber.Config{})
 
+	origins := []string{
+		"https://novaexplorer.netlify.app",
+		"http://localhost:8888",
+		"http://localhost:3000",
+	}
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "https://novaexplorer.netlify.app",
+		AllowOriginsFunc: func(origin string) bool {
+			return slices.Contains(origins, origin)
+		},
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,

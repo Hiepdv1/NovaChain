@@ -21,3 +21,8 @@ export type DocContent =
   | 'wallet'
   | 'mining'
   | 'api';
+
+export interface DownloadInfo {
+  Name: string;
+  Size: number;
+}

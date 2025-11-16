@@ -28,6 +28,7 @@ func (r *DownloadRoutes) RegisterPublic(router fiber.Router) {
 	r.downloadGroup.Get(
 		"/:filename",
 		middlewares.ValidateParams[DowloadFileParams](false),
+		middlewares.ValidateQuery[DowloadFileQuery](false),
 		r.handler.DowloadNovachainHandler,
 	)
 }

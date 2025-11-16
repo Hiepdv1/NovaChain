@@ -1,4 +1,4 @@
-import { handleApiError, throwApiError } from '@/lib/axios/handleErrorApi';
+import { handleApiError } from '@/lib/axios/handleErrorApi';
 import {
   CreateNewTXPayload,
   ResCreateNewTransaction,
@@ -106,7 +106,7 @@ class TransactionService {
       );
       return res.data;
     } catch (err) {
-      throwApiError(err);
+      throw handleApiError(err);
     }
   }
 }
